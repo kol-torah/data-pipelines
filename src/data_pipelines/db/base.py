@@ -1,4 +1,6 @@
-from sqlalchemy import MetaData
+from datetime import datetime
+
+from sqlalchemy import BigInteger, DateTime, MetaData, Text
 from sqlalchemy.orm import DeclarativeBase
 
 # Deterministic constraint names, so Alembic autogenerate produces stable, diffable
@@ -14,3 +16,11 @@ NAMING_CONVENTION = {
 
 class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
+
+    # Repo-wide column type defaults, so models say `Mapped[str]` / `Mapped[datetime]`
+    # and get TEXT / TIMESTAMPTZ / BIGINT rather than VARCHAR / naive TIMESTAMP / INTEGER.
+    type_annotation_map = {
+        str: Text,
+        datetime: DateTime(timezone=True),
+        int: BigInteger,
+    }
