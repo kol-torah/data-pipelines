@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    container_name: kol-torah-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kol_torah}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set (see .env.example)}
+      POSTGRES_DB: ${POSTGRES_DB:-kol_torah}
+      LAB_DB: ${LAB_DB:-kol_torah_lab}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # G7: data directory bind-mounted to the host so backups run outside the container.
+      - ${POSTGRES_DATA_DIR:-./data/postgres}:/var/lib/postgresql
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kol_torah} -d ${POSTGRES_DB:-kol_torah}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
