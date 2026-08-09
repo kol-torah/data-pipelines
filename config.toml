@@ -1,0 +1,2 @@
+# Non-secret configuration — safe to commit. Loaded by src/data_pipelines/config.py.
+# Secrets (DB password, API keys) go in .env instead; see .env.example.
