@@ -1,0 +1,47 @@
+rabbis:
+- slug: rabbi-m-eliyahu
+  name_he: הרב מרדכי אליהו
+  name_en: Mordechai Eliyahu
+  series:
+  - slug: r-eliyaho-q-a
+    name_he: שאלות ותשובות
+    name_en: Q&A
+    lesson_type: Q&A
+    adapter_key: ElyahuQA
+- slug: rabbi-butbul
+  name_he: הרב אהרון בוטבול
+  name_en: Rabbi Aharon Butbul
+  series:
+  - slug: r-butbul-halacha-yomit
+    name_he: הלכה יומית
+    name_en: Daily Halacha
+    lesson_type: Short Lesson
+    adapter_key: ButbulDailyHalacha
+    description_he: סרטוני הלכה יומית
+  - slug: r-butbul-halichot-olam
+    name_he: הליכות עולם
+    name_en: Halichot Olam
+    lesson_type: Q&A
+    adapter_key: ButbulHalichotOlam
+    description_he: תוכנית הרדיו הליכות עולם
+  - slug: r-butbul-sichat-hulin
+    name_he: שיחת חולין של תלמידי חכמים
+    name_en: Informal Talks of Torah Scholars
+    lesson_type: Q&A
+    adapter_key: ButbulSichatHulin
+    description_he: תוכנית הרדיו שיחת חולין של תלמידי חכמים. שאלות בענייני השקפה ואמונה
+  - slug: r-butbul-weekly-ashkelon
+    name_he: השיעור השבועי באשקלון של הרב בוטבול
+    name_en: The Weekly Ashkelon Lesson of Rabbi Butbul
+    lesson_type: Halacha Lesson
+    adapter_key: ButbulWeeklyLessonAshkelon
+    description_he: השיעור השבוע של הרב בוטבול באשקלון
+- slug: rabbi-j-ariel
+  name_he: הרב יעקב אריאל
+  name_en: Rabbi Jacob Ariel
+  series:
+  - slug: r-ariel-q-a
+    name_he: שאלות ותשובות
+    name_en: Q&A
+    lesson_type: Q&A
+    adapter_key: ArielQA
