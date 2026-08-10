@@ -6,6 +6,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from data_pipelines.adapters.base import LessonCandidate
+from data_pipelines.adapters.hebrew_date import parse_hebrew_date
 from data_pipelines.adapters.youtube import YouTubePlaylistAdapter
 
 ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
@@ -93,3 +94,28 @@ class ButbulSichatHulinAdapter(_ButbulTitleAdapter):
         head = self._PREFIX_RE.sub("", head)
         head = head.replace('"', "")
         return re.sub(r"\s+", " ", head).strip()
+
+
+class ButbulWeeklyLessonAshkelonAdapter(YouTubePlaylistAdapter):
+    PLAYLIST_IDS = ("PLDOEgolnX2-xOF2aL29beuC8JX-VaaZRs",)
+
+    # Unlike the other two Butbul playlists, titles here give a Hebrew-calendar date
+    # (Hebrew letters or English transliteration, see hebrew_date.py) instead of a
+    # Gregorian one, wrapped in a dozen-plus boilerplate phrasings ("השידור החי",
+    # "השיעור השבועי המרכזי", "השיעור העולמי המרכזי", ...) too varied to strip
+    # reliably — so unlike _ButbulTitleAdapter's subclasses, title_he is left as the
+    # raw title; only recorded_at is extracted.
+    def _candidate_from_entry(self, entry: dict[str, Any]) -> LessonCandidate:
+        raw_title = entry["title"]
+        recorded_date = parse_hebrew_date(raw_title)
+        recorded_at = (
+            datetime(recorded_date.year, recorded_date.month, recorded_date.day, tzinfo=ISRAEL_TZ)
+            if recorded_date is not None
+            else None
+        )
+        return LessonCandidate(
+            external_id=entry["id"],
+            url=entry["url"],
+            title_he=raw_title,
+            recorded_at=recorded_at,
+        )

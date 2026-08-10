@@ -4,9 +4,14 @@ Grows one entry at a time as each adapter is implemented.
 """
 
 from data_pipelines.adapters.base import SeriesAdapter
-from data_pipelines.adapters.butbul import ButbulHalichotOlamAdapter, ButbulSichatHulinAdapter
+from data_pipelines.adapters.butbul import (
+    ButbulHalichotOlamAdapter,
+    ButbulSichatHulinAdapter,
+    ButbulWeeklyLessonAshkelonAdapter,
+)
 
 ADAPTERS: dict[str, type[SeriesAdapter]] = {
     "ButbulHalichotOlam": ButbulHalichotOlamAdapter,
     "ButbulSichatHulin": ButbulSichatHulinAdapter,
+    "ButbulWeeklyLessonAshkelon": ButbulWeeklyLessonAshkelonAdapter,
 }

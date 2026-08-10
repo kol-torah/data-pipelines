@@ -28,13 +28,29 @@ class YouTubePlaylistAdapter(SeriesAdapter):
         for playlist_id in self.playlist_ids():
             playlist_url = f"https://www.youtube.com/playlist?list={playlist_id}"
             result = subprocess.run(
-                ["yt-dlp", "--flat-playlist", "-J", playlist_url],
+                [
+                    "yt-dlp",
+                    # Without this, flat-playlist listing sometimes hands back an
+                    # auto-translated English title instead of the channel's actual
+                    # Hebrew one (full per-video extraction gets it right, but doing
+                    # that for every video would trade the whole point of
+                    # --flat-playlist away). "iw" is YouTube's legacy code for
+                    # Hebrew; "he" is rejected.
+                    "--extractor-args",
+                    "youtube:lang=iw",
+                    "--flat-playlist",
+                    "-J",
+                    playlist_url,
+                ],
                 capture_output=True,
                 check=True,
                 text=True,
             )
             playlist = json.loads(result.stdout)
-            entries = playlist["entries"]
+            # A deleted/private video stays listed in the playlist but comes back
+            # with every field null except id/url — nothing to build a candidate
+            # from, so skip it.
+            entries = [e for e in playlist["entries"] if e.get("title") is not None]
             # flat-playlist listing doesn't carry the upload date; fetched
             # separately via the Data API, which does, so updates to already-known
             # clips can be noticed later by comparing published_at.
