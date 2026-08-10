@@ -6,8 +6,9 @@ list_youtube_playlists.py for one-off lookups. Not used for listing videos withi
 playlist or for downloading — that stays on yt-dlp (no API key/quota needed there).
 """
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
+from datetime import datetime
 
 import httpx
 
@@ -58,3 +59,25 @@ def list_channel_playlists(channel_id: str) -> Iterator[PlaylistInfo]:
         page_token = data.get("nextPageToken")
         if not page_token:
             return
+
+
+def get_video_publish_dates(video_ids: Iterable[str]) -> dict[str, datetime]:
+    """snippet.publishedAt per video id — flat-playlist listing doesn't carry this
+    (see YouTubePlaylistAdapter.discover), so it's fetched separately, batched 50 at
+    a time (the API's per-request id limit)."""
+    ids = list(video_ids)
+    publish_dates: dict[str, datetime] = {}
+    for i in range(0, len(ids), 50):
+        batch = ids[i : i + 50]
+        response = httpx.get(
+            f"{API_BASE}/videos",
+            params={
+                "part": "snippet",
+                "id": ",".join(batch),
+                "key": get_settings().youtube_api_key.get_secret_value(),
+            },
+        )
+        response.raise_for_status()
+        for item in response.json()["items"]:
+            publish_dates[item["id"]] = datetime.fromisoformat(item["snippet"]["publishedAt"])
+    return publish_dates
