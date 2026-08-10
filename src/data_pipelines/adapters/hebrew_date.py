@@ -77,7 +77,13 @@ def _month_number(name: str, *, hebrew: bool, year: int) -> int | None:
 _HNUM = r'(?:[א-ת]+["״][א-ת]|[א-ת][\'׳])'
 _HEBREW_DATE_RE = re.compile(
     rf"(?P<day>{_HNUM})\s+"
-    r"(?P<month>מרחשוון|מרחשון|אדר[\s-]?[אב]|[א-ת]{2,6})\s+"
+    # "אדר א'"/"אדר ב'" carry their own geresh on the א/ב (it's itself a Hebrew
+    # numeral, 1 or 2) — consumed here but outside the group, so match["month"]
+    # comes out as the plain "אדר א"/"אדר ב" that _HEBREW_ADAR_ALEPH/BEIS expect.
+    # Without this, the alternative fails (next char is "'", not whitespace) and
+    # falls through to the generic [א-ת]{2,6} branch, which matches just "אדר" —
+    # ambiguous in a leap year and silently wrong in a non-leap one.
+    r"(?P<month>מרחשוון|מרחשון|אדר[\s-]?[אב]|[א-ת]{2,6})['׳]?\s+"
     rf"ה?(?P<year>{_HNUM})"
 )
 
@@ -92,13 +98,19 @@ _ENGLISH_DATE_RES = (
 )
 
 
-def parse_hebrew_date(text: str) -> date | None:
-    """Finds the first recognizable Hebrew-calendar date in text and converts it to
-    a Gregorian date.date. Returns None if nothing recognizable is found — including
-    when a "day month year" shape matches but the month name isn't a Hebrew month
-    (e.g. a plain Gregorian date like "August 6, 2026" slipping through the English
-    regexes), or when "Adar" alone is ambiguous for a leap year (see _month_number).
-    """
+# When a title has a day+month but no real trailing year (e.g. a title that just
+# discusses Adar in passing, with no date of its own), the year group can still
+# backtrack onto some unrelated numeral-shaped word later in the text and produce a
+# syntactically valid but nonsense date. Treated as a plausibility backstop rather
+# than tuned to current data: any source this pipeline points at is recent, so a
+# result outside a generously wide band is a parsing artifact, not a real finding.
+_PLAUSIBLE_YEARS = range(1990, 2100)
+
+
+def find_hebrew_date(text: str) -> tuple[date, tuple[int, int]] | None:
+    """Like parse_hebrew_date, but also returns the (start, end) span of the matched
+    date substring — for callers that need to strip the date back out of the
+    surrounding text (e.g. to recover just the topic/occasion around it)."""
     match = _HEBREW_DATE_RE.search(text)
     if match is not None:
         day = _hebrew_numeral_to_int(match["day"])
@@ -108,9 +120,11 @@ def parse_hebrew_date(text: str) -> date | None:
             month = _month_number(match["month"], hebrew=True, year=year)
             if month is not None:
                 try:
-                    return HebrewDate(year, month, day).to_pydate()
+                    result = HebrewDate(year, month, day).to_pydate()
                 except ValueError:
-                    pass
+                    result = None
+                if result is not None and result.year in _PLAUSIBLE_YEARS:
+                    return result, match.span()
 
     for pattern in _ENGLISH_DATE_RES:
         match = pattern.search(text)
@@ -121,8 +135,21 @@ def parse_hebrew_date(text: str) -> date | None:
         if month is None:
             continue
         try:
-            return HebrewDate(year, month, int(match["day"])).to_pydate()
+            result = HebrewDate(year, month, int(match["day"])).to_pydate()
         except ValueError:
             continue
+        if result.year in _PLAUSIBLE_YEARS:
+            return result, match.span()
 
     return None
+
+
+def parse_hebrew_date(text: str) -> date | None:
+    """Finds the first recognizable Hebrew-calendar date in text and converts it to
+    a Gregorian date.date. Returns None if nothing recognizable is found — including
+    when a "day month year" shape matches but the month name isn't a Hebrew month
+    (e.g. a plain Gregorian date like "August 6, 2026" slipping through the English
+    regexes), or when "Adar" alone is ambiguous for a leap year (see _month_number).
+    """
+    found = find_hebrew_date(text)
+    return found[0] if found is not None else None

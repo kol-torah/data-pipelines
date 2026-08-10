@@ -1,12 +1,14 @@
 """Butbul (YouTube) adapters. documents/plans/adapters-plan.md §1.1, §4."""
 
 import re
+from collections.abc import Iterable
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from data_pipelines.adapters import youtube_api
 from data_pipelines.adapters.base import LessonCandidate
-from data_pipelines.adapters.hebrew_date import parse_hebrew_date
+from data_pipelines.adapters.hebrew_date import find_hebrew_date, parse_hebrew_date
 from data_pipelines.adapters.youtube import YouTubePlaylistAdapter
 
 ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
@@ -117,5 +119,60 @@ class ButbulWeeklyLessonAshkelonAdapter(YouTubePlaylistAdapter):
             external_id=entry["id"],
             url=entry["url"],
             title_he=raw_title,
+            recorded_at=recorded_at,
+        )
+
+
+class ButbulDailyHalachaAdapter(YouTubePlaylistAdapter):
+    # One playlist per Hebrew year, all titled "הלכה יומית <year>" — resolved by
+    # prefix at runtime (documents/plans/adapters-plan.md §1.1) rather than hardcoding
+    # ids, so a new year's playlist shows up without a code change. Same channel also
+    # hosts Weekly Ashkelon plus an unrelated rabbi's playlist; the prefix filter
+    # keeps this adapter off both.
+    CHANNEL_ID = "UCS9moGQA0U4MqWzT98mIlGw"
+    TITLE_PREFIX = "הלכה יומית"
+
+    def playlist_ids(self) -> Iterable[str]:
+        return [
+            playlist.id
+            for playlist in youtube_api.list_channel_playlists(self.CHANNEL_ID)
+            if playlist.title.startswith(self.TITLE_PREFIX)
+        ]
+
+    # Two title layouts, both seen throughout: credit-then-date-then-topic
+    # ("הגאון הרב אהרון בוטבול - הלכה יומית - <date> - <topic>") and topic-first as a
+    # question, credit-and-date trailing ("<topic>? - הלכה יומית מפי הגאון הרב אהרון
+    # בוטבול - <date>", with dash/space placement drifting around "מפי" and the
+    # date). Rather than anchor on position like the other two adapters, the credit
+    # block is matched wherever it falls and cut out, the date substring (found by
+    # hebrew_date.find_hebrew_date, which also gives its span) is cut out, and
+    # whatever survives — with leftover dashes trimmed off the ends — is the topic.
+    _CREDIT_RE = re.compile(
+        r"(?:הגאון\s+)?הרב\s+אהרו?ן\s+בוטבול\s*-?\s*הלכה\s+יומית\s*-?\s*"
+        r"|"
+        r"הלכה\s+יומית\s+מפי\s+(?:הגאון\s+)?הרב\s+אהרו?ן\s+בוטבול\s*-?\s*"
+    )
+    _EDGE_DASHES_RE = re.compile(r"^[\s\-]+|[\s\-]+$")
+
+    def _candidate_from_entry(self, entry: dict[str, Any]) -> LessonCandidate:
+        raw_title = entry["title"]
+        found = find_hebrew_date(raw_title)
+        if found is None:
+            return LessonCandidate(external_id=entry["id"], url=entry["url"], title_he=raw_title)
+
+        recorded_date, (start, end) = found
+        recorded_at = datetime(
+            recorded_date.year, recorded_date.month, recorded_date.day, tzinfo=ISRAEL_TZ
+        )
+        remainder = raw_title[:start] + raw_title[end:]
+        remainder = self._CREDIT_RE.sub("", remainder)
+        remainder = self._EDGE_DASHES_RE.sub("", remainder)
+        topic = re.sub(r"\s+", " ", remainder).strip() or raw_title
+
+        return LessonCandidate(
+            external_id=entry["id"],
+            url=entry["url"],
+            title_he=topic,
+            description_he=raw_title,
             recorded_at=recorded_at,
         )
