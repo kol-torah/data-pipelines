@@ -1,2 +1,7 @@
 # Non-secret configuration — safe to commit. Loaded by src/data_pipelines/config.py.
 # Secrets (DB password, API keys) go in .env instead; see .env.example.
+
+# Audio bucket (design.md G9). Credentials for this IAM user live in .env.
+s3_bucket_name = "kol-torah-media"
+aws_region = "us-east-1"
+aws_user_name = "kol-torah-ingestion"

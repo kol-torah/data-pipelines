@@ -21,23 +21,39 @@ Source data: `~/src/kol-torah/documentation/source-mapping/kol-torah-sources.xls
 | Eliyahu | `r-eliyaho-q-a` | `ElyahuQA` | RSS, paginated, + HTML scrape | see §1.2 |
 | Ariel | `r-ariel-q-a` | `ArielQA` | Proprietary JSON API (Spreaker) | see §1.3 |
 
-### 1.1 Butbul (YouTube) — needs confirmation before implementation
+### 1.1 Butbul (YouTube) — resolved via the YouTube Data API
 
-The sheet gives a channel-playlists landing page, not per-series playlist IDs, and it
-gives **two different channel handles**:
+Confirmed with `data_pipelines.adapters.list_youtube_playlists` (§7, item 1): the two handles
+in the sheet are **two genuinely different channels**, not an old/new handle for one
+channel. Rabbi Aharon Butbul's content is split across both:
 
-- `r-butbul-halichot-olam` and `r-butbul-sichat-hulin` link to
-  `youtube.com/@הרבאהרוןבוטבול-ק7מ/playlists` (Hebrew handle)
-- `r-butbul-halacha-yomit` and `r-butbul-weekly-ashkelon` link to
-  `youtube.com/@Rabbi_Aharon_Butbul/playlists` (Latin handle)
+**Channel A** — `@הרבאהרוןבוטבול-ש7מ`, id `UCYG1zMLW7s7QTwalxKOLmzw`:
 
-**Open question:** are these the same channel (old handle vs. new handle — YouTube
-allows changing the `@handle` while keeping the channel id) or two actually-distinct
-channels? Either way, we need the **specific playlist ID** for each of the 4 series
-(and, for Daily Halacha, the naming pattern for the yearly playlists, e.g. `הלכה יומית
-תשפ"ו`) before writing those adapter classes — the spreadsheet only gives a channel to
-browse, not the playlist itself. This is manual, one-time lookup work, not something to
-guess at in code.
+| Series | Playlist id |
+| --- | --- |
+| `r-butbul-halichot-olam` | `PLPPy6SF11zD8YIS1hqdscDdDPjWcICPPc` |
+| `r-butbul-sichat-hulin` | `PLPPy6SF11zD_-dW8PU1Br5mPRD8fK91LH` |
+
+Also has a third playlist, `דעת ותורה - הרב אברהם בוטבול` — a **different rabbi**
+(Avraham, not Aharon, Butbul) apparently sharing this channel. Not one of ours; the
+adapters must only ever touch the two playlist ids above, never "everything on this
+channel."
+
+**Channel B** — `@Rabbi_Aharon_Butbul`, id `UCS9moGQA0U4MqWzT98mIlGw`:
+
+| Series | Playlist id(s) |
+| --- | --- |
+| `r-butbul-weekly-ashkelon` | `PLDOEgolnX2-xOF2aL29beuC8JX-VaaZRs` ("השיעור השבועי") |
+| `r-butbul-halacha-yomit` | one playlist per Hebrew year, all titled `הלכה יומית <year>` — currently 5: תשפ"ב `PLDOEgolnX2-yIQMrF6ItTWaE8x5wr81LB`, תשפ"ג `PLDOEgolnX2-wGNuSAg90ZSTeQLU8n1NWy`, תשפ"ד `PLDOEgolnX2-z6nuBPrOrOnsePpitIC_MX`, תשפ"ה `PLDOEgolnX2-zftmHofud7pjevIeXJrck2`, תשפ"ו `PLDOEgolnX2-xqOhwwvEDh01f6fxjqSFqP` |
+
+Also has `הרב עובדיה יוסף בוטבול` — again a different rabbi (Ovadia Yosef Butbul),
+same caution applies.
+
+**Daily Halacha pattern:** rather than matching the Hebrew year token itself (which
+would need updating — or breaking — every year, and rolls over from the תשפ״X decade
+to תשצ״X after 5789), match on the fixed, source-confirmed prefix: title starts with
+`הלכה יומית`. Nothing else on either channel starts with those two words, so it's an
+unambiguous filter and needs no maintenance as years roll over.
 
 ### 1.2 Eliyahu (harav.org) — two-hop discovery
 
@@ -63,7 +79,7 @@ carrying an `episode_id` and a `download_url` that resolves straight to audio.
 
 ---
 
-## 2. Adapter interface (as agreed earlier in this conversation)
+## 2. Adapter interface
 
 `src/data_pipelines/adapters/base.py`:
 
@@ -86,7 +102,7 @@ class SeriesAdapter(ABC):
     @abstractmethod
     def discover(self) -> Iterator[LessonCandidate]:
         """Yield every lesson currently visible at the source — always a full
-        listing, never incremental. Idempotency is the caller's job (§3)."""
+        listing, never incremental. Idempotency is the caller's job (§5)."""
 
     @abstractmethod
     def download(self, lesson: Lesson) -> Path:
@@ -105,18 +121,23 @@ beyond the row it's given.
 
 `src/data_pipelines/adapters/youtube.py` — `YouTubePlaylistAdapter(SeriesAdapter)`:
 
-- Wraps `yt-dlp` (new dependency, §6).
-- `playlist_urls(self) -> Iterable[str]` — **overridable**, defaults to reading a
-  `PLAYLIST_URLS: ClassVar[tuple[str, ...]]` constant on the subclass. Most series
-  (Halichot Olam, Sichat Chulin, Weekly Ashkelon) just set this constant. Daily
-  Halacha overrides the method itself: list the channel's playlists via `yt-dlp
-  --flat-playlist` on the channel URL, filter titles against a year-pattern regex
-  (e.g. `^הלכה יומית תש`), and return the matching playlist URLs — this is what "one
-  playlist per year" needs, and it's exactly the kind of per-series logic
-  `database-schema.md` §4.1 puts in the adapter class rather than the schema.
-- `discover()` (concrete, shared): for each playlist URL, run `yt-dlp
-  --flat-playlist -J` to list entries cheaply (id, title, url — no per-video
-  network call), and yield a `LessonCandidate` per entry.
+- Wraps `yt-dlp` (new dependency, §6) for listing videos within a known playlist and
+  for download/extraction. Does **not** use the YouTube Data API — that's reserved
+  for the one case that needs structured channel/playlist metadata (below).
+- `playlist_ids(self) -> Iterable[str]` — **overridable**, defaults to reading a
+  `PLAYLIST_IDS: ClassVar[tuple[str, ...]]` constant on the subclass. Halichot Olam,
+  Sichat Chulin, and Weekly Ashkelon just set this constant (values in §4). Daily
+  Halacha overrides the method itself: call
+  `data_pipelines.adapters.youtube_api.list_channel_playlists(CHANNEL_ID)` (the same
+  client used for the one-off lookup, §7 item 1) and return the ids of playlists whose
+  title starts with `הלכה יומית` (§1.1) — this is what "one playlist per year, and
+  so on every year" needs without annual maintenance, and it's exactly the kind of
+  per-series logic `database-schema.md` §4.1 puts in the adapter class rather than
+  the schema.
+- `discover()` (concrete, shared): for each playlist id, run `yt-dlp
+  --flat-playlist -J` against `https://www.youtube.com/playlist?list=<id>` to list
+  entries cheaply (id, title, url — no per-video network call), and yield a
+  `LessonCandidate` per entry.
 - `download()` (concrete, shared): run `yt-dlp -x` (extract audio, discard video)
   against `lesson.url`, return the resulting local path.
 
@@ -133,13 +154,18 @@ beyond the row it's given.
 
 ## 4. The six series adapters
 
-`src/data_pipelines/adapters/butbul.py`:
+`src/data_pipelines/adapters/butbul.py` — playlist/channel ids from §1.1:
 
-- `ButbulHalichotOlamAdapter(YouTubePlaylistAdapter)` — `PLAYLIST_URLS = (<TBD>,)`
-- `ButbulSichatHulinAdapter(YouTubePlaylistAdapter)` — `PLAYLIST_URLS = (<TBD>,)`
-- `ButbulWeeklyLessonAshkelonAdapter(YouTubePlaylistAdapter)` — `PLAYLIST_URLS = (<TBD>,)`
-- `ButbulDailyHalachaAdapter(YouTubePlaylistAdapter)` — overrides `playlist_urls()`
-  as described in §3; channel URL and year-pattern regex are constants here.
+- `ButbulHalichotOlamAdapter(YouTubePlaylistAdapter)` —
+  `PLAYLIST_IDS = ("PLPPy6SF11zD8YIS1hqdscDdDPjWcICPPc",)`
+- `ButbulSichatHulinAdapter(YouTubePlaylistAdapter)` —
+  `PLAYLIST_IDS = ("PLPPy6SF11zD_-dW8PU1Br5mPRD8fK91LH",)`
+- `ButbulWeeklyLessonAshkelonAdapter(YouTubePlaylistAdapter)` —
+  `PLAYLIST_IDS = ("PLDOEgolnX2-xOF2aL29beuC8JX-VaaZRs",)`
+- `ButbulDailyHalachaAdapter(YouTubePlaylistAdapter)` — overrides `playlist_ids()`
+  as described in §3; `CHANNEL_ID = "UCS9moGQA0U4MqWzT98mIlGw"` and the `הלכה יומית`
+  prefix filter are constants here. Not hardcoding the 5 currently-known playlist ids
+  is the whole point — new years must show up without a code change.
 
 `src/data_pipelines/adapters/eliyahu.py`:
 
@@ -175,8 +201,9 @@ keyed exactly by the `adapter_key` values already sitting in the `series` table
 
 ## 5. Generic pipeline stage functions
 
-These are **not** adapter code — same for every series, per the discover/download/
-store split worked out earlier in this conversation.
+These are **not** adapter code — same for every series regardless of source, per the
+discover/download/store stage split in design.md §2.1: discovery and download are
+source-specific (the adapter), everything after "a local audio file exists" is not.
 
 `src/data_pipelines/pipeline/discover.py`:
 
@@ -205,12 +232,11 @@ def store_lesson_audio(lesson: Lesson, audio_path: Path) -> AudioFile:
     file in the local cache, upload to the bucket, insert the audio_files row."""
 ```
 
-`store_lesson_audio` is the one piece with a real open dependency: **the bucket
-provider (S3 vs. GCS) is still an open decision** (design.md §9). Plan is to write
-`upload_to_bucket(local_path: Path, storage_key: str) -> str` as a small seam now
-(one function, one call site) so the provider choice is a single swap later, not a
-scattered one — but the actual client library isn't picked yet and shouldn't be
-guessed at here.
+`store_lesson_audio` uploads via S3 (resolved, §7 item 3) — credentials and bucket
+name are already in `Settings` (§8). `boto3` itself isn't a dependency yet; add it
+alongside this function's implementation. Still worth keeping the upload behind one
+seam, `upload_to_bucket(local_path: Path, storage_key: str) -> str`, purely so a
+future provider change (design.md §9 leaves the door open) is a one-function swap.
 
 A per-series driver ties the three together:
 
@@ -225,31 +251,62 @@ def run_series(session: Session, series: Series) -> None:
 
 ---
 
-## 6. New dependencies (not yet in `pyproject.toml`)
+## 6. New dependencies
 
-- `yt-dlp` — YouTube discovery + download for all 4 Butbul series.
-- An HTTP client for `DirectUrlAdapter`, the harav.org page scrape, and the Spreaker
-  API — `httpx` or `requests`; no strong reason to prefer one yet, worth a quick
-  decision before implementation rather than during it.
+- `yt-dlp` — YouTube discovery + download for all 4 Butbul series. **Not yet added.**
+- `httpx` — **added** (§7 item 2); currently only used by
+  `data_pipelines.adapters.youtube_api`. Will also cover `DirectUrlAdapter`, the
+  harav.org page scrape, and the Spreaker pagination once those are written.
 - Audio probing (format/duration/bytes) for `store_lesson_audio` — likely shelling
   out to `ffprobe` (part of the `ffmpeg` package, not a Python dependency) rather
   than adding another library; `yt-dlp` itself needs `ffmpeg` on `PATH` for audio
   extraction anyway, so it's already a system-level requirement either way.
-- Bucket client — deferred until the S3-vs-GCS decision (design.md §9) is made.
+- `boto3` — S3 client for `store_lesson_audio`. **Not yet added** — bucket provider
+  is resolved (S3, §7 item 3), this is just not implemented yet.
 
 ---
 
-## 7. Open questions to resolve before / during implementation
+## 7. Open questions
 
-1. **Butbul playlist IDs** — need the 3 fixed playlist URLs plus the Daily Halacha
-   year-naming pattern, and confirmation of whether the two channel handles in the
-   sheet are the same channel (§1.1).
-2. **RSS/HTTP client choice** — `httpx` vs `requests` (§6).
-3. **Bucket provider** — S3 vs GCS (design.md §9); `store_lesson_audio`'s upload
-   seam is designed to make this a one-function swap either way.
+1. **Butbul playlist IDs — resolved, see §1.1.** Built
+   `data_pipelines/adapters/youtube_api.py` (a small `httpx`-based client:
+   `resolve_channel_id`, `list_channel_playlists`, both used at runtime by
+   `ButbulDailyHalachaAdapter`, not just for lookup) and
+   `data_pipelines/adapters/list_youtube_playlists.py` (CLI wrapper around it, run
+   with `uv run python -m data_pipelines.adapters.list_youtube_playlists <handle>`).
+   Ran it against both handles from the sheet — turned out to be two distinct
+   channels, each also hosting an unrelated Butbul-surnamed rabbi's playlist, so the
+   adapters must key strictly off the specific ids in §1.1, not "every playlist on
+   the channel".
+2. **RSS/HTTP client choice — resolved: `httpx`.** Async-capable and the more
+   "pythonic" of the two per current community consensus (`requests` has no async
+   story). Already added to `pyproject.toml` (pulled in for `youtube_api.py`,
+   §1.1) — nothing further to do here, `DirectUrlAdapter.download()`, Eliyahu's RSS
+   pagination + page scrape, and Ariel's Spreaker pagination all just import it.
+3. **Bucket provider — resolved: S3.** Config fields landed in `config.py`
+   (`s3_bucket_name`, `aws_region`, `aws_user_name`, `aws_access_key_id`,
+   `aws_secret_access_key`) — see `.env.example` / `config.toml`. `boto3` isn't a
+   dependency yet; add it alongside the `store_lesson_audio` implementation, not
+   before, so the dependency shows up in the same commit as its first use.
 4. **YouTube discovery cost at scale** — `discover()` re-lists every playlist in
    full on every run (by design — no cursor, see §2). Fine at the current
    catalogue size; if a playlist grows into the thousands, consider having
    `discover()` accept a `known_external_ids` hint so it can skip the (currently
    already-cheap, flat) re-listing of already-known videos. Not needed yet — noted
    so it isn't forgotten.
+
+## 8. Credentials — done
+
+`src/data_pipelines/config.py` has the following fields (no defaults, same required
+treatment as `postgres_password` — every entry point that calls `get_settings()`
+would fail to start without them, same as any other missing secret):
+
+- `.env`: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `YOUTUBE_API_KEY`
+- `config.toml`: `s3_bucket_name`, `aws_region` (defaulted to `us-east-1`),
+  `aws_user_name`
+
+All filled in and confirmed working — `get_settings()` loads cleanly, and the YouTube
+Data API lookups in §1.1 ran against the real key. Nothing left to do here.
+
+`aws_user_name` isn't used by any AWS API call (boto3 only needs the key pair +
+region) — it's kept for reference/audit only.

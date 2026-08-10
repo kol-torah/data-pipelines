@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     postgres_db: str = "kol_torah"
     lab_db: str = "kol_torah_lab"
 
+    s3_bucket_name: str
+    aws_region: str = "us-east-1"
+    aws_user_name: str
+    aws_access_key_id: SecretStr
+    aws_secret_access_key: SecretStr
+
+    youtube_api_key: SecretStr
+
     @classmethod
     def settings_customise_sources(
         cls,
@@ -57,4 +65,6 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    # Required fields are populated from env/.env/config.toml at runtime, not
+    # passed here; the type checker can't see that, hence the ignore.
+    return Settings()  # type: ignore[call-arg]
