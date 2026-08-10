@@ -10,7 +10,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from data_pipelines.adapters.base import SeriesAdapter
-from data_pipelines.adapters.registry import ADAPTERS
+from data_pipelines.adapters.registry import get_adapter
 from data_pipelines.config import get_settings
 from data_pipelines.db import Lesson, Series
 from data_pipelines.pipelines.discover.s01_discover import discover_all
@@ -34,8 +34,11 @@ def run() -> None:
         print("=== stage 2: download ===")
         jobs: list[tuple[SeriesAdapter, Series, Lesson]] = []
         for series in series_list:
+            adapter = get_adapter(series)
+            if adapter is None:
+                print(f"{series.slug}: no adapter for {series.adapter_key!r}, skipping")
+                continue
             pending = recover_from_bucket(session, series, lessons_needing_download(session, series))
-            adapter = ADAPTERS[series.adapter_key](series)
             jobs.extend((adapter, series, lesson) for lesson in pending)
         run_downloads(engine, jobs, cache_root)
 

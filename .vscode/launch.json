@@ -13,6 +13,17 @@
             ],
             "cwd": "${workspaceFolder}",
             "justMyCode": true
+        },
+        {
+            "name": "Python: Discover Pipeline",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "data_pipelines.pipelines.discover.run",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            },
+            "justMyCode": true
         }
     ]
 }

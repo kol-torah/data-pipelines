@@ -25,6 +25,7 @@ from data_pipelines.config import get_settings
 from data_pipelines.db import AudioFile, Lesson, LessonDownload, Series
 from data_pipelines.pipelines.discover.progress import make_progress
 from data_pipelines.pipelines.discover.storage import storage_key_prefix, upload_to_bucket
+from data_pipelines.pipelines.discover.text import pluralize
 
 
 def lessons_needing_store(session: Session, series: Series) -> list[Lesson]:
@@ -106,7 +107,7 @@ def store_all(session: Session, series_list: list[Series], cache_root: Path) -> 
             progress.advance(task)
 
     for series in series_list:
-        print(f"{series.slug}: {counts[series.slug]} lesson(s) stored")
+        print(f"{series.slug}: {pluralize(counts[series.slug], 'lesson')} stored")
 
 
 def main() -> None:

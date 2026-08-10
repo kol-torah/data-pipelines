@@ -12,14 +12,16 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from data_pipelines.adapters.base import SeriesAdapter
-from data_pipelines.adapters.registry import ADAPTERS
+from data_pipelines.adapters.registry import get_adapter
 from data_pipelines.config import get_settings
 from data_pipelines.db import Lesson, Series
 from data_pipelines.pipelines.discover.progress import make_progress
+from data_pipelines.pipelines.discover.text import pluralize
 
 
-def discover_new_lessons(session: Session, series: Series, adapter: SeriesAdapter) -> list[Lesson]:
-    """Insert any candidate whose external_id isn't already known for this series."""
+def discover_new_lessons(session: Session, series: Series, adapter: SeriesAdapter) -> tuple[list[Lesson], int]:
+    """Insert any candidate whose external_id isn't already known for this series.
+    Returns the newly-inserted lessons plus how many were already known beforehand."""
     existing_ids = set(
         session.scalars(select(Lesson.external_id).where(Lesson.series_id == series.id))
     )
@@ -40,7 +42,7 @@ def discover_new_lessons(session: Session, series: Series, adapter: SeriesAdapte
         session.add(lesson)
         new_lessons.append(lesson)
     session.commit()
-    return new_lessons
+    return new_lessons, len(existing_ids)
 
 
 def series_to_run(session: Session, series_slug: str | None) -> list[Series]:
@@ -57,9 +59,17 @@ def discover_all(session: Session, series_list: list[Series]) -> None:
         task = progress.add_task("Discovering", total=len(series_list))
         for series in series_list:
             progress.update(task, description=f"Discovering [bold]{series.slug}[/]")
-            adapter: SeriesAdapter = ADAPTERS[series.adapter_key](series)
-            new_lessons = discover_new_lessons(session, series, adapter)
-            progress.console.print(f"{series.slug}: {len(new_lessons)} new lesson(s)")
+            adapter = get_adapter(series)
+            if adapter is None:
+                progress.console.print(
+                    f"{series.slug}: no adapter for {series.adapter_key!r}, skipping"
+                )
+                progress.advance(task)
+                continue
+            new_lessons, existing_count = discover_new_lessons(session, series, adapter)
+            progress.console.print(
+                f"{series.slug}: {existing_count} existing, {pluralize(len(new_lessons), 'new lesson')}"
+            )
             progress.advance(task)
 
 
