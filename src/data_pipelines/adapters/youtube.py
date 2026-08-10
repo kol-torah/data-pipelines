@@ -9,6 +9,7 @@ invoke it as a subprocess.
 import asyncio
 import json
 import subprocess
+import sys
 import tempfile
 from collections.abc import Iterable, Iterator
 from pathlib import Path
@@ -23,6 +24,13 @@ from data_pipelines.db.models import Lesson
 # different series still have to queue behind each other, not just within one.
 _DOWNLOAD_SEMAPHORE = asyncio.Semaphore(1)
 
+# Resolved next to the running interpreter rather than looked up on PATH: yt-dlp is a
+# project dependency (pyproject.toml), so it's always installed in the same venv
+# bin/ directory as sys.executable. A bare "yt-dlp" only resolves via PATH, which is
+# true from an interactive shell (or `uv run`) but not under launchd/cron/systemd,
+# whose jobs get a minimal PATH that was never told about this venv.
+_YT_DLP = str(Path(sys.executable).parent / "yt-dlp")
+
 
 class YouTubePlaylistAdapter(SeriesAdapter):
     PLAYLIST_IDS: ClassVar[tuple[str, ...]] = ()
@@ -35,7 +43,7 @@ class YouTubePlaylistAdapter(SeriesAdapter):
             playlist_url = f"https://www.youtube.com/playlist?list={playlist_id}"
             result = subprocess.run(
                 [
-                    "yt-dlp",
+                    _YT_DLP,
                     # Without this, flat-playlist listing sometimes hands back an
                     # auto-translated English title instead of the channel's actual
                     # Hebrew one (full per-video extraction gets it right, but doing
@@ -80,7 +88,7 @@ class YouTubePlaylistAdapter(SeriesAdapter):
     async def download(self, lesson: Lesson) -> Path:
         out_dir = Path(tempfile.mkdtemp(prefix="yt-dlp-"))
         args = [
-            "yt-dlp",
+            _YT_DLP,
             # YouTube's "n challenge" (anti-bot signature obfuscation) needs a JS
             # runtime to solve; only "deno" is enabled by default and isn't
             # installed here, so fall back to "node" (already present) — paired

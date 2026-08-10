@@ -18,9 +18,12 @@ stage.
 Downloads run concurrently (one asyncio task per lesson); each adapter is responsible
 for throttling itself against its own source's rate limits (see
 YouTubePlaylistAdapter's semaphore) — this stage doesn't know or care what those are.
-The lesson_downloads rows are still written sequentially after all downloads finish,
-not from within the concurrent tasks: SQLAlchemy's Session isn't safe for concurrent
-use, and there's no benefit to serializing cheap inserts through it mid-flight anyway.
+Each lesson_downloads row is written as soon as that lesson's download finishes, in
+completion order, not batched until the whole job list is done: a run interrupted
+partway through (e.g. Ctrl+C) must not lose the record of lessons already downloaded,
+or the next run would re-download them. This is still safe with a plain (non-async)
+SQLAlchemy Session because asyncio is cooperative — the write happens between awaits,
+never actually concurrently with another task's code.
 
 Run with: uv run python -m data_pipelines.pipelines.discover.s02_download [series-slug]
        or: ... s02_download --lesson-id ID
@@ -30,6 +33,7 @@ Run with: uv run python -m data_pipelines.pipelines.discover.s02_download [serie
 import argparse
 import asyncio
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 
 from rich.progress import Progress
@@ -46,13 +50,20 @@ from data_pipelines.pipelines.discover.text import pluralize
 
 STAGING_SUBDIR = "staging"
 
+
+@dataclass
+class DownloadJob:
+    adapter: SeriesAdapter
+    series: Series
+    lesson: Lesson
+
 # Downloads happen strictly one at a time, deliberately — not just inside a given
 # adapter (e.g. YouTubePlaylistAdapter's own semaphore), but across this whole
 # pipeline stage. asyncio.gather still schedules every job up front, so without this
 # cap all of them would sit "in flight" simultaneously (and show a live progress row
 # each) even while blocked on an adapter's own throttling underneath — which both
 # looks like, and is, more than one download running at once.
-MAX_CONCURRENT = 1
+MAX_CONCURRENT = 3
 
 
 def staging_dir(cache_root: Path, series: Series) -> Path:
@@ -118,52 +129,64 @@ async def download_lesson(
     return dest
 
 
-# Series + Lesson travel through alongside the outcome so the caller doesn't need a
-# second lookup to know which job a result belongs to.
-DownloadOutcome = tuple[Series, Lesson, Path | BaseException]
+# Series + Lesson travel through alongside the result so the caller doesn't need a
+# second lookup to know which job an outcome belongs to.
+@dataclass
+class DownloadOutcome:
+    series: Series
+    lesson: Lesson
+    result: Path | BaseException
+
+
+def record_download(session: Session, outcome: DownloadOutcome) -> None:
+    """Written per-lesson, right after that lesson's download finishes — not batched
+    until the whole job list completes. If the run is interrupted (e.g. Ctrl+C)
+    partway through, lessons already recorded here are correctly skipped on the next
+    run instead of being re-downloaded from scratch."""
+    if isinstance(outcome.result, BaseException):
+        print(f"{outcome.series.slug}  {outcome.lesson.external_id}  FAILED: {outcome.result}")
+        return
+    dest = outcome.result
+    session.add(
+        LessonDownload(
+            lesson_id=outcome.lesson.id, local_path=str(dest), bytes=dest.stat().st_size
+        )
+    )
+    session.commit()
+    print(f"{outcome.series.slug}  {outcome.lesson.external_id}  -> {dest}")
 
 
 async def download_all(
-    jobs: list[tuple[SeriesAdapter, Series, Lesson]], cache_root: Path, progress: Progress
-) -> list[DownloadOutcome]:
+    session: Session,
+    jobs: list[DownloadJob],
+    cache_root: Path,
+    progress: Progress,
+) -> None:
     overall = progress.add_task("Downloading lessons", total=len(jobs))
     slots = asyncio.Semaphore(MAX_CONCURRENT)
 
-    async def run_one(adapter: SeriesAdapter, series: Series, lesson: Lesson) -> DownloadOutcome:
+    async def run_one(job: DownloadJob) -> DownloadOutcome:
         async with slots:
-            row = progress.add_task(f"{series.slug}  {lesson.title_he}", total=None)
+            row = progress.add_task(f"{job.series.slug}  {job.lesson.title_he}", total=None)
             try:
-                return series, lesson, await download_lesson(adapter, series, lesson, cache_root)
+                dest = await download_lesson(job.adapter, job.series, job.lesson, cache_root)
+                return DownloadOutcome(job.series, job.lesson, dest)
             except Exception as exc:  # noqa: BLE001 — one bad lesson shouldn't sink the batch
-                return series, lesson, exc
+                return DownloadOutcome(job.series, job.lesson, exc)
             finally:
                 progress.remove_task(row)
                 progress.advance(overall)
 
-    return await asyncio.gather(*(run_one(a, s, lesson) for a, s, lesson in jobs))
+    # as_completed (not gather) so each lesson's row lands as soon as its download
+    # finishes, rather than only after the entire batch is done.
+    for coro in asyncio.as_completed([run_one(job) for job in jobs]):
+        record_download(session, await coro)
 
 
-def record_downloads(session: Session, outcomes: list[DownloadOutcome]) -> None:
-    for series, lesson, outcome in outcomes:
-        if isinstance(outcome, BaseException):
-            print(f"{series.slug}  {lesson.external_id}  FAILED: {outcome}")
-            continue
-        dest = outcome
-        session.add(
-            LessonDownload(lesson_id=lesson.id, local_path=str(dest), bytes=dest.stat().st_size)
-        )
-        print(f"{series.slug}  {lesson.external_id}  -> {dest}")
-    session.commit()
-
-
-def run_downloads(
-    engine, jobs: list[tuple[SeriesAdapter, Series, Lesson]], cache_root: Path
-) -> None:
+def run_downloads(engine, jobs: list[DownloadJob], cache_root: Path) -> None:
     print(f"{pluralize(len(jobs), 'lesson')} to download")
-    with make_progress() as progress:
-        outcomes = asyncio.run(download_all(jobs, cache_root, progress))
-    with Session(engine, expire_on_commit=False) as session:
-        record_downloads(session, outcomes)
+    with Session(engine, expire_on_commit=False) as session, make_progress() as progress:
+        asyncio.run(download_all(session, jobs, cache_root, progress))
 
 
 def main() -> None:
@@ -175,7 +198,7 @@ def main() -> None:
 
     cache_root = get_settings().local_cache_dir
     engine = create_engine(get_settings().database_url())
-    jobs: list[tuple[SeriesAdapter, Series, Lesson]] = []
+    jobs: list[DownloadJob] = []
     with Session(engine, expire_on_commit=False) as session:
         if args.lesson_id is not None:
             lesson = session.get(Lesson, args.lesson_id)
@@ -189,7 +212,7 @@ def main() -> None:
                     if adapter is None:
                         print(f"{series.slug}: no adapter for {series.adapter_key!r}, skipping")
                     else:
-                        jobs.append((adapter, series, pending[0]))
+                        jobs.append(DownloadJob(adapter, series, pending[0]))
         else:
             series_list = (
                 [session.scalar(select(Series).where(Series.slug == args.series_slug))]
@@ -206,7 +229,7 @@ def main() -> None:
                 pending = recover_from_bucket(
                     session, series, lessons_needing_download(session, series)
                 )
-                jobs.extend((adapter, series, lesson) for lesson in pending)
+                jobs.extend(DownloadJob(adapter, series, lesson) for lesson in pending)
 
     run_downloads(engine, jobs, cache_root)
 

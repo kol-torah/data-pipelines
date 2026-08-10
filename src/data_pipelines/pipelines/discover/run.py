@@ -9,12 +9,12 @@ Run with: uv run python -m data_pipelines.pipelines.discover.run
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from data_pipelines.adapters.base import SeriesAdapter
 from data_pipelines.adapters.registry import get_adapter
 from data_pipelines.config import get_settings
-from data_pipelines.db import Lesson, Series
+from data_pipelines.db import Series
 from data_pipelines.pipelines.discover.s01_discover import discover_all
 from data_pipelines.pipelines.discover.s02_download import (
+    DownloadJob,
     lessons_needing_download,
     recover_from_bucket,
     run_downloads,
@@ -32,14 +32,14 @@ def run() -> None:
         discover_all(session, series_list)
 
         print("=== stage 2: download ===")
-        jobs: list[tuple[SeriesAdapter, Series, Lesson]] = []
+        jobs: list[DownloadJob] = []
         for series in series_list:
             adapter = get_adapter(series)
             if adapter is None:
                 print(f"{series.slug}: no adapter for {series.adapter_key!r}, skipping")
                 continue
             pending = recover_from_bucket(session, series, lessons_needing_download(session, series))
-            jobs.extend((adapter, series, lesson) for lesson in pending)
+            jobs.extend(DownloadJob(adapter, series, lesson) for lesson in pending)
         run_downloads(engine, jobs, cache_root)
 
         print("=== stage 3: store ===")
