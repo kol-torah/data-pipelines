@@ -5,3 +5,7 @@
 s3_bucket_name = "kol-torah-media"
 aws_region = "us-east-1"
 aws_user_name = "kol-torah-ingestion"
+
+# Download-staging area and post-store local cache (database-schema.md §4.2).
+# Relative to the repo root; gitignored the same way data/postgres is.
+local_cache_dir = "data/audio-cache"

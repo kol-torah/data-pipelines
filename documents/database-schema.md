@@ -1,7 +1,7 @@
 # Kol Torah — Database Schema: Discover / Download / Store
 
 **Status:** Draft for review
-**Last updated:** 2026-08-09
+**Last updated:** 2026-08-10
 
 ---
 
@@ -24,6 +24,7 @@ actually look like. See §5 for what that means for this slice in the meantime.
 erDiagram
     RABBIS ||--o{ SERIES : has
     SERIES ||--o{ LESSONS : has
+    LESSONS ||--o| LESSON_DOWNLOADS : "awaiting store"
     LESSONS ||--o| AUDIO_FILES : has
     LESSONS ||--o{ LESSON_DUPLICATES : "is a duplicate (lesson_id)"
     LESSONS ||--o{ LESSON_DUPLICATES : "is canonical for (duplicate_of_id)"
@@ -31,7 +32,9 @@ erDiagram
 
 A rabbi has many series; each series is worked by exactly one adapter (a Python class,
 not a database concept — see §4.1) and produces many lessons; each lesson has at most
-one audio file, and may be flagged as a duplicate of another lesson.
+one audio file, and may be flagged as a duplicate of another lesson. A lesson also has
+at most one `lesson_downloads` row, but only transiently — it exists solely in the
+window between a lesson being downloaded and being stored (see §3.4a).
 
 ---
 
@@ -125,6 +128,33 @@ platform-served download — hashing a raw YouTube container tells you nothing a
 whether the same lesson was reposted as, say, an mp3 on a podcast feed, since the
 container and encoding differ even when the underlying recording is identical.
 
+### 3.4a `lesson_downloads`
+
+| Column          | Type        | Constraints                | Notes                                              |
+| --------------- | ----------- | --------------------------- | ---------------------------------------------------- |
+| `lesson_id`     | bigint      | PK, FK → `lessons.id`        | one row per lesson, deleted once stored              |
+| `local_path`    | text        | not null                    | where the download stage wrote the file              |
+| `bytes`         | bigint      | not null                    | size at the moment the download completed            |
+| `downloaded_at` | timestamptz | not null, default now()     |                                                       |
+
+A side table between design.md §2.1's Download and Store stages, existing only for the
+window between them — inserted when a download finishes, deleted once the store step
+consumes it (§3.4). Deliberately narrower than a general `stage_runs` table (§5): it
+isn't per-stage timing or a job queue, it's a single "this specific download
+completed" signal for the one place that turned out to need one.
+
+The reason it needs to be a table rather than "check whether a file exists at the
+expected path" (which is exactly how the *post-store* local cache works, §4.2): a
+download that dies partway through — network drop, disk full, process killed — can
+leave a real, non-empty file sitting at that path. Filesystem presence alone can't
+distinguish that from a complete download; a database row can, because it's only
+written *after* the file is fully in place. The store stage trusts the row, not the
+glob.
+
+`bytes` is recorded at download time, not because store re-verifies it (it doesn't,
+yet), but so a corrupted-after-the-fact file — modified or truncated after being
+staged — is at least visible on inspection as a size mismatch.
+
 ### 3.5 `lesson_duplicates`
 
 | Column            | Type        | Constraints                       | Notes                                        |
@@ -176,11 +206,16 @@ lives. It also keeps the column provider-neutral: a future move from S3 to GCS (
 question in design.md §9) changes only how the bucket root is constructed, not this
 table.
 
-The local cache has no existence flag in the database. It is genuinely a cache: files
-may be deleted by hand at any time (manual cleanup, for now — see §5), so any code that
-wants to know whether a lesson's audio is available locally must check the filesystem
-directly (`Path(cache_root / storage_key).exists()`) rather than trust a stored boolean
-that could go stale the moment someone deletes a file.
+The **post-store** local cache still has no existence flag in the database. It is
+genuinely a cache: files may be deleted by hand at any time (manual cleanup, for now —
+see §5), so any code that wants to know whether a stored lesson's audio is available
+locally must check the filesystem directly
+(`Path(cache_root / storage_key).exists()`) rather than trust a stored boolean that
+could go stale the moment someone deletes a file. This is unrelated to
+`lesson_downloads` (§3.4a): that table isn't a cache-presence flag either — it's a
+completion signal for a specific handoff between two stages, populated only once and
+deleted once consumed, not a long-lived flag anyone would expect to stay in sync with
+manual filesystem changes.
 
 ### 4.3 Bilingual names and descriptions, but not uniformly required
 
@@ -217,8 +252,10 @@ enum later is a cheap migration once the real set of values is known.
   slice is already covered by "does an `audio_files` row exist for this lesson." Revisit
   once transcription needs real stage tracking, and fold discover/download/store into
   whatever that design turns out to be.
-  - **Known gap from deferring this:** no durable record of a failed download/store
-    attempt (errors go to application logs, not the database, for now). Acceptable while
+  - **Known gap from deferring this:** no durable record of a *failed* download/store
+    attempt (errors go to application logs, not the database, for now) — `lesson_downloads`
+    (§3.4a) records a download's *success*, not its attempts, so a lesson that failed
+    to download is indistinguishable from one that was never tried. Acceptable while
     this runs by hand; worth revisiting once it runs as an unattended daily job.
 - **`series_sources` table.** Discussed and intentionally not built yet — see §4.1.
 - **Lesson translation.** `lessons.title_en` and `lessons.description_en` exist so those

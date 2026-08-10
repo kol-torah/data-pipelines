@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -35,7 +35,17 @@ class Settings(BaseSettings):
     aws_access_key_id: SecretStr
     aws_secret_access_key: SecretStr
 
+    # Root for both the download-staging area and the post-store local cache, keyed
+    # by audio_files.storage_key (database-schema.md §4.2). Relative paths resolve
+    # against REPO_ROOT, matching POSTGRES_DATA_DIR's convention.
+    local_cache_dir: Path = Path("data/audio-cache")
+
     youtube_api_key: SecretStr
+
+    @field_validator("local_cache_dir")
+    @classmethod
+    def _resolve_local_cache_dir(cls, value: Path) -> Path:
+        return value if value.is_absolute() else REPO_ROOT / value
 
     @classmethod
     def settings_customise_sources(

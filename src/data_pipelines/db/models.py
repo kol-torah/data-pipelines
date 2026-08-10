@@ -61,6 +61,20 @@ class Lesson(Base):
 
     series: Mapped["Series"] = relationship(back_populates="lessons")
     audio_file: Mapped["AudioFile | None"] = relationship(back_populates="lesson")
+    download: Mapped["LessonDownload | None"] = relationship(back_populates="lesson")
+
+
+class LessonDownload(Base):
+    """documents/database-schema.md §3.4a."""
+
+    __tablename__ = "lesson_downloads"
+
+    lesson_id: Mapped[int] = mapped_column(ForeignKey("lessons.id"), primary_key=True)
+    local_path: Mapped[str]
+    bytes: Mapped[int]
+    downloaded_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    lesson: Mapped["Lesson"] = relationship(back_populates="download")
 
 
 class AudioFile(Base):

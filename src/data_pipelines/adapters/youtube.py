@@ -6,6 +6,7 @@ releases, while the CLI is what they keep stable — so external callers are mea
 invoke it as a subprocess.
 """
 
+import asyncio
 import json
 import subprocess
 import tempfile
@@ -16,6 +17,11 @@ from typing import Any, ClassVar
 from data_pipelines.adapters import youtube_api
 from data_pipelines.adapters.base import LessonCandidate, SeriesAdapter
 from data_pipelines.db.models import Lesson
+
+# Shared across every YouTubePlaylistAdapter instance/series, not per-instance: the
+# limit YouTube enforces is per source IP, not per playlist, so downloads for
+# different series still have to queue behind each other, not just within one.
+_DOWNLOAD_SEMAPHORE = asyncio.Semaphore(1)
 
 
 class YouTubePlaylistAdapter(SeriesAdapter):
@@ -71,20 +77,34 @@ class YouTubePlaylistAdapter(SeriesAdapter):
             title_he=entry["title"],
         )
 
-    def download(self, lesson: Lesson) -> Path:
+    async def download(self, lesson: Lesson) -> Path:
         out_dir = Path(tempfile.mkdtemp(prefix="yt-dlp-"))
-        result = subprocess.run(
-            [
-                "yt-dlp",
-                "-x",
-                "--output",
-                str(out_dir / "%(id)s.%(ext)s"),
-                "--print",
-                "after_move:filepath",
-                lesson.url,
-            ],
-            capture_output=True,
-            check=True,
-            text=True,
-        )
-        return Path(result.stdout.strip().splitlines()[-1])
+        args = [
+            "yt-dlp",
+            # YouTube's "n challenge" (anti-bot signature obfuscation) needs a JS
+            # runtime to solve; only "deno" is enabled by default and isn't
+            # installed here, so fall back to "node" (already present) — paired
+            # with the yt-dlp-ejs dependency, which provides the actual solver
+            # script node runs. Without both, every format download 404s with
+            # "video is not available" even though the video is public.
+            "--js-runtimes",
+            "node",
+            "-x",
+            "--output",
+            str(out_dir / "%(id)s.%(ext)s"),
+            "--print",
+            "after_move:filepath",
+            lesson.url,
+        ]
+        # Serialized process-wide (see _DOWNLOAD_SEMAPHORE) so this stays under
+        # YouTube's rate limits even when the caller runs several series concurrently.
+        async with _DOWNLOAD_SEMAPHORE:
+            process = await asyncio.create_subprocess_exec(
+                *args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await process.communicate()
+        if process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode, args, stdout, stderr)
+        return Path(stdout.decode().strip().splitlines()[-1])

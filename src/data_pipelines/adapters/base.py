@@ -33,7 +33,10 @@ class SeriesAdapter(ABC):
         discover_new_lessons pipeline stage)."""
 
     @abstractmethod
-    def download(self, lesson: Lesson) -> Path:
+    async def download(self, lesson: Lesson) -> Path:
         """Fetch this lesson's audio into a local file, audio only — video (if any)
         is never persisted to disk. Source-specific because *how* you get to
-        audio-only differs per platform (design.md §2.1, stage 2)."""
+        audio-only differs per platform (design.md §2.1, stage 2). Async so a
+        caller can run downloads across series concurrently; a single source may
+        still serialize its own downloads internally (see YouTubePlaylistAdapter)
+        to stay under that source's rate limits."""
