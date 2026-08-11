@@ -1,7 +1,7 @@
 # Discover pipeline
 
 **Status:** Implemented — stages 1-3
-**Last updated:** 2026-08-10
+**Last updated:** 2026-08-11
 **Code:** `src/data_pipelines/pipelines/discover/`
 
 ---
@@ -48,8 +48,8 @@ flowchart TD
     B5 --> LESSONDL[("lesson_downloads")]
 
     subgraph S3["Stage 3 — Store (s03_store.py)"]
-        C1["lesson_downloads row exists,\nno audio_files row yet"] --> C2["ffprobe duration +\nsha256 of the audio"]
-        C2 --> C3["move file into place:\n{cache_root}/{storage_key}"]
+        C1["lesson_downloads row exists,\nno audio_files row yet"] --> C2["move file into place:\n{cache_root}/{storage_key}\n(skipped if already there)"]
+        C2 --> C3["ffprobe duration +\nsha256 of the audio"]
         C3 --> C4["upload to S3, with hash +\nduration as object metadata"]
         C4 --> C5["insert audio_files row"]
         C5 --> C6["delete lesson_downloads row"]
@@ -74,6 +74,23 @@ candidate whose `external_id` isn't already known for that series.
 Idempotent via the `(series_id, external_id)` unique constraint on `lessons`
 (`database-schema.md` §3.3) — no cursor or checkpoint needed. Re-running after
 nothing changed at the source re-derives the same candidates and inserts nothing.
+
+`discover_new_lessons()` already knows every `external_id` the database has for the
+series before it calls the adapter at all, so that set — plus the stage's own live
+`Progress` display — is passed straight into `adapter.discover(known_external_ids=...,
+progress=...)`. Both are hints, not a contract (`SeriesAdapter.discover()`,
+`adapters/base.py`): an adapter whose discovery is already cheap in one shot (e.g.
+`YouTubePlaylistAdapter`, one `yt-dlp --flat-playlist` call per playlist) can ignore
+`known_external_ids` entirely and just yield everything, since the `external_id`
+check above still filters it regardless. It exists for the opposite case — a source
+where seeing a single candidate costs its own network round-trip (`ElyahuQAAdapter`'s
+two-hop discovery, `adapters-plan.md` §1.2) — where skipping that cost for lessons
+already known is the difference between a rerun costing one request per lesson in the
+archive and costing only the (cheap) listing calls. `progress`, when given, is
+somewhere for an adapter to render its own nested task(s) into the stage's existing
+display rather than opening a second, competing one — e.g. `ButbulDailyHalachaAdapter`
+shows a per-playlist sub-bar (it's the only Butbul series with more than one
+playlist), `ElyahuQAAdapter` shows a per-item one.
 
 ```bash
 uv run python -m data_pipelines.pipelines.discover.s01_discover               # every series
@@ -183,13 +200,15 @@ same completion signal stage 2 writes, read the other way round.
 
 For each pending lesson:
 
-1. `ffprobe` the staged file for `duration_s`; `sha256` it for `content_hash`
+1. Build `storage_key = {rabbi_slug}/{series_slug}/{external_id}.{format}` (format
+   taken from the staged file's extension) and move the file from staging into its
+   final local-cache position, `{cache_root}/{storage_key}` (`database-schema.md`
+   §4.2) — skipped if a file is already sitting at that path (see "Interruption
+   safety" below).
+2. `ffprobe` the now-in-place file for `duration_s`; `sha256` it for `content_hash`
    (computed on the **extracted, audio-only** file, not the raw platform download —
    the same lesson reposted in a different container/codec should still hash
    differently unless it's genuinely the same bytes).
-2. Build `storage_key = {rabbi_slug}/{series_slug}/{external_id}.{format}` and move
-   the file from staging into its final local-cache position,
-   `{cache_root}/{storage_key}` (`database-schema.md` §4.2).
 3. Upload to S3 (`storage.py:upload_to_bucket`), attaching `content_hash` and
    `duration_s` as custom object metadata — this is what makes stage 2's bucket
    recovery (§4.1) possible without re-downloading.
@@ -197,6 +216,17 @@ For each pending lesson:
 5. Delete the `lesson_downloads` row — its job is done, and the file it pointed at
    is now duplicated at the proper cache path, so there's no reason to keep either
    the staging copy or the row around.
+
+**Interruption safety.** Step 1's move happens before the `audio_files` row is
+committed (step 4) — a run interrupted in that window (Ctrl+C, a crash) leaves the
+file already relocated to its cache path while the database still shows the lesson as
+pending (`lesson_downloads` row present, no `audio_files` row), pointing at a staging
+path that no longer has anything at it. Without a check, a retry would crash trying to
+move a file that isn't there anymore. `store_lesson_audio()` checks whether the cache
+path already exists before attempting the move; if it does, the move is skipped and
+the retry just continues from step 2 on the file already in place — the same "safe to
+retry no matter where the last run stopped" property stage 2 has for its own
+`lesson_downloads` write (§4.2).
 
 ```bash
 uv run python -m data_pipelines.pipelines.discover.s03_store               # every series
@@ -221,18 +251,42 @@ picks up exactly where the last one left off.
 
 ---
 
-## 7. Where things live
+## 7. Resetting a series for testing (`reset_series.py`)
 
-| What | Where | Notes |
-| --- | --- | --- |
-| Download staging (pre-store) | `{local_cache_dir}/staging/{series_slug}/{external_id}.{ext}` | Pipeline-internal working space, not the schema's official cache. Tracked in `lesson_downloads`, not by filesystem presence. |
-| Local cache (post-store) | `{local_cache_dir}/{storage_key}` | `database-schema.md` §4.2. No DB existence flag — checked directly on disk. Files may be deleted by hand (manual cleanup, for now); a later transcription-stage read just re-pulls from the bucket. |
-| Bucket | `s3://{bucket}/{storage_key}` | Same `storage_key` as the local cache, different root. Carries `content-hash`/`duration-s` as object metadata (§4.1, §5). |
-| `local_cache_dir` config | `config.toml` → `Settings.local_cache_dir` | Defaults to `data/audio-cache`, resolved relative to the repo root if given as a relative path. |
+Deletes every `Lesson` row for one series — and its dependent `audio_files` /
+`lesson_downloads` / `lesson_duplicates` rows, none of which have an `ON DELETE
+CASCADE` (see the alembic migrations), so children are deleted before the `lessons`
+rows they reference. **Never touches the bucket.**
+
+That last part is the point: with the database rows gone but the bucket untouched,
+re-running stage 1 finds nothing and re-inserts every lesson as new, and stage 2 then
+hits every one of them through the §4.1 bucket-recovery path instead of downloading —
+this is the practical way to exercise `recover_from_bucket()` without waiting for (or
+staging) an actual database reset.
+
+```bash
+uv run python -m data_pipelines.pipelines.discover.reset_series <series-slug>       # asks for confirmation
+uv run python -m data_pipelines.pipelines.discover.reset_series <series-slug> --yes # skips it
+```
+
+Unlike the three stages above, the series slug is required rather than optional —
+this command is destructive, so an unqualified run must not be able to wipe every
+series' lessons at once.
 
 ---
 
-## 8. Related documents
+## 8. Where things live
+
+| What                         | Where                                                           | Notes                                                                                                                                                                                                   |
+| ---------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Download staging (pre-store) | `{local_cache_dir}/staging/{series_slug}/{external_id}.{ext}` | Pipeline-internal working space, not the schema's official cache. Tracked in`lesson_downloads`, not by filesystem presence.                                                                           |
+| Local cache (post-store)     | `{local_cache_dir}/{storage_key}`                             | `database-schema.md` §4.2. No DB existence flag — checked directly on disk. Files may be deleted by hand (manual cleanup, for now); a later transcription-stage read just re-pulls from the bucket. |
+| Bucket                       | `s3://{bucket}/{storage_key}`                                 | Same`storage_key` as the local cache, different root. Carries `content-hash`/`duration-s` as object metadata (§4.1, §5).                                                                        |
+| `local_cache_dir` config   | `config.toml` → `Settings.local_cache_dir`                 | Defaults to`data/audio-cache`, resolved relative to the repo root if given as a relative path.                                                                                                        |
+
+---
+
+## 9. Related documents
 
 - `documents/design.md` — overall pipeline shape (§2.1) and the deterministic/
   experimental split this pipeline sits inside.
