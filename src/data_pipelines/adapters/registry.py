@@ -1,8 +1,6 @@
-"""Maps series.adapter_key to its adapter class. documents/plans/adapters-plan.md §4.
+"""Maps series.adapter_key to its adapter class."""
 
-Grows one entry at a time as each adapter is implemented.
-"""
-
+from data_pipelines.adapters.ariel import ArielQAAdapter
 from data_pipelines.adapters.base import SeriesAdapter
 from data_pipelines.adapters.butbul import (
     ButbulDailyHalachaAdapter,
@@ -19,12 +17,13 @@ ADAPTERS: dict[str, type[SeriesAdapter]] = {
     "ButbulWeeklyLessonAshkelon": ButbulWeeklyLessonAshkelonAdapter,
     "ButbulDailyHalacha": ButbulDailyHalachaAdapter,
     "ElyahuQA": ElyahuQAAdapter,
+    "ArielQA": ArielQAAdapter,
 }
 
 
 def get_adapter(series: Series) -> SeriesAdapter | None:
-    """None if series.adapter_key isn't registered yet — e.g. a series seeded from
-    the catalogue (documents/plans/adapters-plan.md lists six; Ariel's is the only
-    one not yet built). Callers should skip the series, not crash."""
+    """None if series.adapter_key isn't registered — e.g. a series seeded from the
+    catalogue whose adapter hasn't been built yet. Callers should skip the series,
+    not crash."""
     adapter_cls = ADAPTERS.get(series.adapter_key)
     return adapter_cls(series) if adapter_cls is not None else None

@@ -3,15 +3,17 @@ periodically (e.g. from cron) — each stage is independently idempotent (s01_di
 s02_download, s03_store), so a prior run that was interrupted partway (e.g. some
 downloads succeeded but weren't stored yet) just picks up where it left off.
 
-Run with: uv run python -m data_pipelines.pipelines.discover.run
+Run with: uv run python -m data_pipelines.pipelines.discover.run [series-slug]
+(omit series-slug to run every series)
 """
 
-from sqlalchemy import create_engine, select
+import argparse
+
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from data_pipelines.adapters.registry import get_adapter
 from data_pipelines.config import get_settings
-from data_pipelines.db import Series
 from data_pipelines.pipelines.discover.s01_discover import discover_all
 from data_pipelines.pipelines.discover.s02_download import (
     DownloadJob,
@@ -20,13 +22,14 @@ from data_pipelines.pipelines.discover.s02_download import (
     run_downloads,
 )
 from data_pipelines.pipelines.discover.s03_store import store_all
+from data_pipelines.pipelines.discover.series import series_to_run
 
 
-def run() -> None:
+def run(series_slug: str | None = None) -> None:
     cache_root = get_settings().local_cache_dir
     engine = create_engine(get_settings().database_url())
     with Session(engine, expire_on_commit=False) as session:
-        series_list = list(session.scalars(select(Series)))
+        series_list = series_to_run(session, series_slug)
 
         print("=== stage 1: discover ===")
         discover_all(session, series_list)
@@ -46,5 +49,12 @@ def run() -> None:
         store_all(session, series_list, cache_root)
 
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("series_slug", nargs="?", default=None)
+    args = parser.parse_args()
+    run(args.series_slug)
+
+
 if __name__ == "__main__":
-    run()
+    main()
