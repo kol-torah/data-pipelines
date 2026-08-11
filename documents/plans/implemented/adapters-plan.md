@@ -1,8 +1,9 @@
 # Plan: adapter interface, discover/download/store stages, and the six series adapters
 
-**Status:** Plan only, not implemented. Delete this file once the code below exists —
-it's a plan, not documentation; `documents/database-schema.md` and `documents/design.md`
-are the durable references.
+**Status: implemented.** All six adapters (§4) and the shared interface (§2, §3) exist
+under `src/data_pipelines/adapters/`, keyed in `registry.py`. Kept here for historical
+context only — `documents/database-schema.md` and `documents/design.md` are the durable
+references; this file is no longer updated as the code evolves.
 
 Source data: `~/src/kol-torah/documentation/source-mapping/kol-torah-sources.xlsx`
 (Sheet1), cross-referenced against the rabbis/series already entered in the DB (see
