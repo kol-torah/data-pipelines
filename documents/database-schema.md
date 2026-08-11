@@ -1,7 +1,7 @@
 # Kol Torah — Database Schema: Discover / Download / Store
 
 **Status:** Draft for review
-**Last updated:** 2026-08-10
+**Last updated:** 2026-08-11
 
 ---
 
@@ -240,6 +240,36 @@ into an enum before more series are onboarded (e.g. before deciding where video 
 fit) risks a migration to loosen it almost immediately. Tightening a text column into an
 enum later is a cheap migration once the real set of values is known.
 
+### 4.5 Lesson status is derived from row presence, not stored
+
+A lesson's progress through discover/download/store is exactly three states, and none of
+them is a stored column — each is a distinct combination of whether a `lesson_downloads`
+row (§3.4a) and an `audio_files` row (§3.4) exist for it:
+
+| State                          | `lesson_downloads` row | `audio_files` row |
+| ------------------------------- | ------------------------ | -------------------- |
+| **Discovered** — not yet downloaded | absent                    | absent                |
+| **Downloaded** — awaiting store     | present                   | absent                |
+| **Stored** — fully processed        | absent (deleted at store) | present               |
+
+(The fourth combination — both present — cannot occur: store deletes the
+`lesson_downloads` row in the same step that inserts the `audio_files` row, §3.4a.)
+
+This is the discover pipeline's actual idempotency check, not just a display concept —
+`documents/pipelines/discover.md` §4/§5 has stage 2 query for "needs download" (both rows
+absent) and stage 3 query for "needs store" (`lesson_downloads` present, `audio_files`
+absent) using precisely this table. There is deliberately no `status` column on `lessons`
+duplicating it: a stored status would need to be kept in lockstep with these two tables by
+hand, and could drift out of sync with them the same way a stored "is the audio cached
+locally" boolean could drift from the filesystem (§4.2's reasoning applies equally here).
+Anything that needs a lesson's status — pipeline query or admin UI — should derive it from
+these two tables, ideally through one shared helper, rather than re-deriving the
+combination logic at each call site.
+
+This only distinguishes "not yet attempted" from "done," not failure: see §5's known gap
+on `lesson_downloads` below — a lesson whose download or store failed looks identical to
+one that was never attempted, since failures aren't recorded anywhere yet.
+
 ---
 
 ## 5. Deliberately deferred
@@ -266,6 +296,3 @@ enum later is a cheap migration once the real set of values is known.
   problem for when the pipeline runs unattended and fetches new lessons daily, not
   before.
 - **`lesson_type` enum.** See §4.4.
-- **Admin interface for adding rabbis/series.** Not yet decided whether this is a
-  Streamlit page in the lab or a standalone script — doesn't affect the schema either
-  way, so deferred until the tables exist to build against.
