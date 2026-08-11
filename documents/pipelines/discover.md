@@ -107,6 +107,17 @@ within a series, listing everything under `{rabbi_slug}/{series_slug}/` and
 matching by filename (ignoring the extension) finds the object regardless of what
 format it happened to be stored in.
 
+The check is scoped to lessons that actually need one. Reading an object's custom
+metadata costs a `HEAD` round-trip per object — the listing itself is cheap, the
+metadata is not — so `list_existing_audio()` takes the pending lessons'
+`external_id`s and skips every key outside that set, and `recover_from_bucket()`
+doesn't hit the bucket at all when nothing is pending. That is the ordinary case on
+a re-run: `lessons_needing_download()` has already excluded every lesson with an
+`audio_files` row, and re-deriving from the bucket what the database already knows
+would cost minutes of serial `HEAD`s for a guaranteed-empty result. The full sweep
+happens only in the situation it exists for — a database that lost rows the bucket
+still has.
+
 A match is only usable if the object carries `content-hash` and `duration-s` as
 custom S3 metadata (attached at upload time by stage 3, §5) — those can't be
 recovered any other way without downloading and re-probing the file, which is
@@ -122,11 +133,19 @@ Local download only happens on demand, later, in the transcription pipeline.
 ### 4.2 Actually downloading
 
 For lessons that really are new, `adapter.download()` runs — one `asyncio` task per
-lesson, all launched concurrently via `asyncio.gather`. This stage doesn't manage
-rate limits itself; each adapter is responsible for throttling its own downloads
-against its own source's limits (`YouTubePlaylistAdapter` serializes every download
-through a shared `asyncio.Semaphore(1)`, since YouTube's anti-bot limits are
-per-IP, not per-playlist or per-series — see `adapters/youtube.py`).
+lesson, with a stage-level `MAX_CONCURRENT` semaphore (`s02_download.py`) capping
+how many of those tasks are actually in flight at once. The cap is deliberate and
+separate from any adapter's own throttling: every task is scheduled up front, so
+without it every lesson would sit "in flight" simultaneously — each showing a live
+progress row — while blocked on an adapter's rate limiting underneath, which both
+looks like, and is, more downloads running at once than intended. Tune the constant
+to change the stage's ceiling.
+
+Below that ceiling, this stage doesn't manage rate limits itself; each adapter is
+responsible for throttling its own downloads against its own source's limits
+(`YouTubePlaylistAdapter` serializes every download through a shared
+`asyncio.Semaphore(1)`, since YouTube's anti-bot limits are per-IP, not
+per-playlist or per-series — see `adapters/youtube.py`).
 
 A finished download is moved into a **staging** area — deliberately not the same
 directory as the final local cache (§4.3 of `database-schema.md`), since
@@ -137,12 +156,17 @@ the file's format:
 {local_cache_dir}/staging/{series_slug}/{external_id}.{ext}
 ```
 
-Because downloads run concurrently but `SQLAlchemy`'s `Session` isn't safe for
-concurrent use, the `lesson_downloads` rows are **not** written from inside the
-concurrent tasks. `download_all()` collects every outcome (success or exception)
-via `asyncio.gather`, and `record_downloads()` writes them to the database
-afterward, sequentially, once every download has finished. A lesson that fails to
-download is logged and simply left out — it'll show up again next run.
+Each `lesson_downloads` row is written as soon as that lesson's download finishes,
+in completion order — `download_all()` consumes the tasks through
+`asyncio.as_completed` (not `asyncio.gather`) and calls `record_download()` per
+outcome. Batching the writes until the whole job list was done would mean a run
+interrupted partway through (Ctrl+C, a crash) loses the record of lessons already
+downloaded, and the next run re-downloads them.
+
+This is safe with a plain, non-async `Session` even though the downloads themselves
+overlap: `asyncio` is cooperative, so the write happens between awaits, never
+actually concurrently with another task's code. A lesson that fails to download is
+logged and simply left out — it'll show up again next run.
 
 ```bash
 uv run python -m data_pipelines.pipelines.discover.s02_download               # every series

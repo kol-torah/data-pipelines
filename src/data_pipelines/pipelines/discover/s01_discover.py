@@ -16,6 +16,7 @@ from data_pipelines.adapters.registry import get_adapter
 from data_pipelines.config import get_settings
 from data_pipelines.db import Lesson, Series
 from data_pipelines.pipelines.discover.progress import make_progress
+from data_pipelines.pipelines.discover.series import series_to_run
 from data_pipelines.pipelines.discover.text import pluralize
 
 
@@ -43,15 +44,6 @@ def discover_new_lessons(session: Session, series: Series, adapter: SeriesAdapte
         new_lessons.append(lesson)
     session.commit()
     return new_lessons, len(existing_ids)
-
-
-def series_to_run(session: Session, series_slug: str | None) -> list[Series]:
-    if series_slug is None:
-        return list(session.scalars(select(Series)))
-    series = session.scalar(select(Series).where(Series.slug == series_slug))
-    if series is None:
-        raise SystemExit(f"no series with slug {series_slug!r}")
-    return [series]
 
 
 def discover_all(session: Session, series_list: list[Series]) -> None:

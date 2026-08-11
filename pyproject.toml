@@ -25,3 +25,19 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/data_pipelines"]
+
+# Pyright is what VS Code's Pylance runs, so this section is also what the editor
+# obeys — keeping `uv run pyright` and the squiggles in the editor in agreement.
+# "standard" is Pylance's own default; it's pinned here so a Pylance update can't
+# silently change what counts as an error.
+[tool.pyright]
+include = ["src"]
+typeCheckingMode = "standard"
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.411",
+]

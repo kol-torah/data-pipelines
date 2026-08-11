@@ -113,6 +113,8 @@ class YouTubePlaylistAdapter(SeriesAdapter):
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, stderr = await process.communicate()
+        # communicate() only returns once the process has exited, so returncode is set.
+        assert process.returncode is not None
         if process.returncode != 0:
             raise subprocess.CalledProcessError(process.returncode, args, stdout, stderr)
         return Path(stdout.decode().strip().splitlines()[-1])

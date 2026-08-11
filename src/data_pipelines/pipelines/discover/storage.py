@@ -4,13 +4,16 @@ re-downloading it — e.g. after a database reset that wiped audio_files/lesson_
 but not the bucket itself).
 """
 
+from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
 
 import boto3
+from rich.progress import Progress
 
 from data_pipelines.config import get_settings
 from data_pipelines.db import Lesson, Series
+from data_pipelines.pipelines.discover.progress import label
 
 # Custom S3 object metadata keys. Attached at upload time so a later lookup can
 # reconstruct an audio_files row from the object alone, without downloading it.
@@ -45,33 +48,90 @@ class ExistingAudio:
     duration_s: float
 
 
-def list_existing_audio(series: Series) -> dict[str, ExistingAudio]:
-    """Every already-uploaded, metadata-tagged audio object for this series, keyed by
-    external_id — one prefix listing (paginated) per series, rather than one lookup
-    per lesson. An object without the hash/duration metadata (e.g. uploaded before
-    this convention existed) can't be reconstructed without downloading it, so it's
-    silently excluded rather than reported as existing."""
+@dataclass
+class _ListedObject:
+    """One object from the prefix listing, before its metadata has been read. Only
+    what the listing itself returns — content_hash and duration_s aren't in it."""
+
+    external_id: str
+    storage_key: str
+    format: str
+    bytes: int
+
+
+def _list_wanted_objects(client, prefix: str, wanted: set[str]) -> list[_ListedObject]:
     settings = get_settings()
-    client = _client()
-    prefix = f"{series.rabbi.slug}/{series.slug}/"
-    found: dict[str, ExistingAudio] = {}
+    listed: list[_ListedObject] = []
     paginator = client.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=settings.s3_bucket_name, Prefix=prefix):
         for obj in page.get("Contents", []):
             key = obj["Key"]
             external_id, _, format_ = key.removeprefix(prefix).partition(".")
-            metadata = client.head_object(Bucket=settings.s3_bucket_name, Key=key).get(
-                "Metadata", {}
+            if external_id not in wanted:
+                continue
+            listed.append(
+                _ListedObject(
+                    external_id=external_id, storage_key=key, format=format_, bytes=obj["Size"]
+                )
             )
+    return listed
+
+
+def list_existing_audio(
+    series: Series,
+    external_ids: Collection[str],
+    *,
+    progress: Progress | None = None,
+) -> dict[str, ExistingAudio]:
+    """The already-uploaded, metadata-tagged audio objects for the given lessons of
+    this series, keyed by external_id — one prefix listing (paginated) per series,
+    rather than one lookup per lesson. An object without the hash/duration metadata
+    (e.g. uploaded before this convention existed) can't be reconstructed without
+    downloading it, so it's silently excluded rather than reported as existing.
+
+    Only the callers' own external_ids are looked up. The listing is cheap (1000 keys
+    a request) but the per-object metadata is not — it costs a HEAD round-trip each,
+    and a series whose lessons are nearly all already known to the database would
+    otherwise spend minutes fetching metadata nobody asked for.
+
+    Those HEADs are serial, so the listing is finished before the first one is sent:
+    that's what lets the (optional) progress task below know its own total and report
+    real progress rather than an indeterminate spinner.
+    """
+    wanted = set(external_ids)
+    if not wanted:
+        return {}
+
+    settings = get_settings()
+    client = _client()
+    prefix = f"{series.rabbi.slug}/{series.slug}/"
+    listed = _list_wanted_objects(client, prefix, wanted)
+
+    task = (
+        progress.add_task(label(series.slug), total=len(listed))
+        if progress is not None and listed
+        else None
+    )
+    found: dict[str, ExistingAudio] = {}
+    try:
+        for obj in listed:
+            metadata = client.head_object(
+                Bucket=settings.s3_bucket_name, Key=obj.storage_key
+            ).get("Metadata", {})
+            if progress is not None and task is not None:
+                progress.advance(task)
             if _CONTENT_HASH_META_KEY not in metadata or _DURATION_S_META_KEY not in metadata:
                 continue
-            found[external_id] = ExistingAudio(
-                storage_key=key,
-                format=format_,
-                bytes=obj["Size"],
+            found[obj.external_id] = ExistingAudio(
+                storage_key=obj.storage_key,
+                format=obj.format,
+                bytes=obj.bytes,
                 content_hash=metadata[_CONTENT_HASH_META_KEY],
                 duration_s=float(metadata[_DURATION_S_META_KEY]),
             )
+    finally:
+        if progress is not None and task is not None:
+            progress.remove_task(task)
     return found
 
 

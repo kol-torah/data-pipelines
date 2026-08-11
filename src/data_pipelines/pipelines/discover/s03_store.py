@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from data_pipelines.config import get_settings
 from data_pipelines.db import AudioFile, Lesson, LessonDownload, Series
 from data_pipelines.pipelines.discover.progress import make_progress
+from data_pipelines.pipelines.discover.series import series_to_run
 from data_pipelines.pipelines.discover.storage import storage_key_prefix, upload_to_bucket
 from data_pipelines.pipelines.discover.text import pluralize
 
@@ -68,6 +69,8 @@ def _probe_duration_s(path: Path) -> float:
 
 
 def store_lesson_audio(session: Session, series: Series, lesson: Lesson, cache_root: Path) -> AudioFile:
+    # Guaranteed by lessons_needing_store's inner join on LessonDownload.
+    assert lesson.download is not None
     staged = Path(lesson.download.local_path)
     format_ = staged.suffix.removeprefix(".")
     storage_key = f"{storage_key_prefix(series, lesson)}.{format_}"
@@ -118,15 +121,7 @@ def main() -> None:
     cache_root = get_settings().local_cache_dir
     engine = create_engine(get_settings().database_url())
     with Session(engine, expire_on_commit=False) as session:
-        series_list = (
-            [session.scalar(select(Series).where(Series.slug == args.series_slug))]
-            if args.series_slug is not None
-            else list(session.scalars(select(Series)))
-        )
-        if series_list == [None]:
-            raise SystemExit(f"no series with slug {args.series_slug!r}")
-
-        store_all(session, series_list, cache_root)
+        store_all(session, series_to_run(session, args.series_slug), cache_root)
 
 
 if __name__ == "__main__":

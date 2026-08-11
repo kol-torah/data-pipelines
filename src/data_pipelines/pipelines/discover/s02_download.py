@@ -33,6 +33,7 @@ Run with: uv run python -m data_pipelines.pipelines.discover.s02_download [serie
 import argparse
 import asyncio
 import shutil
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -44,7 +45,8 @@ from data_pipelines.adapters.base import SeriesAdapter
 from data_pipelines.adapters.registry import get_adapter
 from data_pipelines.config import get_settings
 from data_pipelines.db import AudioFile, Lesson, LessonDownload, Series
-from data_pipelines.pipelines.discover.progress import make_progress
+from data_pipelines.pipelines.discover.progress import label, make_progress
+from data_pipelines.pipelines.discover.series import series_to_run
 from data_pipelines.pipelines.discover.storage import list_existing_audio
 from data_pipelines.pipelines.discover.text import pluralize
 
@@ -63,7 +65,7 @@ class DownloadJob:
 # cap all of them would sit "in flight" simultaneously (and show a live progress row
 # each) even while blocked on an adapter's own throttling underneath — which both
 # looks like, and is, more than one download running at once.
-MAX_CONCURRENT = 3
+MAX_CONCURRENT = 1
 
 
 def staging_dir(cache_root: Path, series: Series) -> Path:
@@ -91,8 +93,18 @@ def recover_from_bucket(session: Session, series: Series, lessons: list[Lesson])
     """Splits off any lesson whose audio is already in the bucket: inserts its
     audio_files row directly from the object's metadata (no download, no
     lesson_downloads row — it never touches the local cache) and drops it from the
-    list. Lessons genuinely not yet uploaded pass through untouched."""
-    existing = list_existing_audio(series)
+    list. Lessons genuinely not yet uploaded pass through untouched.
+
+    Nothing pending means nothing to look up: a lesson that already has an
+    audio_files row was excluded upstream by lessons_needing_download, and hitting
+    the bucket to rediscover what the database already knows is the common case on a
+    re-run — it must not cost a listing, let alone a HEAD per object."""
+    if not lessons:
+        return lessons
+    with make_progress() as progress:
+        existing = list_existing_audio(
+            series, [lesson.external_id for lesson in lessons], progress=progress
+        )
     if not existing:
         return lessons
 
@@ -138,13 +150,23 @@ class DownloadOutcome:
     result: Path | BaseException
 
 
+def _failure_detail(exc: BaseException) -> str:
+    """str(CalledProcessError) is just "returned non-zero exit status N" — the
+    actual reason lives in .stderr and is otherwise silently dropped."""
+    if isinstance(exc, subprocess.CalledProcessError) and exc.stderr:
+        stderr = exc.stderr.decode(errors="replace") if isinstance(exc.stderr, bytes) else exc.stderr
+        return f"{exc}\n{stderr.strip()}"
+    return str(exc)
+
+
 def record_download(session: Session, outcome: DownloadOutcome) -> None:
     """Written per-lesson, right after that lesson's download finishes — not batched
     until the whole job list completes. If the run is interrupted (e.g. Ctrl+C)
     partway through, lessons already recorded here are correctly skipped on the next
     run instead of being re-downloaded from scratch."""
     if isinstance(outcome.result, BaseException):
-        print(f"{outcome.series.slug}  {outcome.lesson.external_id}  FAILED: {outcome.result}")
+        detail = _failure_detail(outcome.result)
+        print(f"{outcome.series.slug}  {outcome.lesson.external_id}  FAILED: {detail}")
         return
     dest = outcome.result
     session.add(
@@ -162,12 +184,15 @@ async def download_all(
     cache_root: Path,
     progress: Progress,
 ) -> None:
-    overall = progress.add_task("Downloading lessons", total=len(jobs))
+    overall = progress.add_task(label("Downloading"), total=len(jobs))
     slots = asyncio.Semaphore(MAX_CONCURRENT)
 
     async def run_one(job: DownloadJob) -> DownloadOutcome:
         async with slots:
-            row = progress.add_task(f"{job.series.slug}  {job.lesson.title_he}", total=None)
+            # Series slug only, at a fixed width (progress.label): a per-lesson title
+            # here would resize the description column every time a row came or went,
+            # sliding every bar in the display sideways.
+            row = progress.add_task(label(job.series.slug), total=None)
             try:
                 dest = await download_lesson(job.adapter, job.series, job.lesson, cache_root)
                 return DownloadOutcome(job.series, job.lesson, dest)
@@ -214,14 +239,7 @@ def main() -> None:
                     else:
                         jobs.append(DownloadJob(adapter, series, pending[0]))
         else:
-            series_list = (
-                [session.scalar(select(Series).where(Series.slug == args.series_slug))]
-                if args.series_slug is not None
-                else list(session.scalars(select(Series)))
-            )
-            if series_list == [None]:
-                raise SystemExit(f"no series with slug {args.series_slug!r}")
-            for series in series_list:
+            for series in series_to_run(session, args.series_slug):
                 adapter = get_adapter(series)
                 if adapter is None:
                     print(f"{series.slug}: no adapter for {series.adapter_key!r}, skipping")
