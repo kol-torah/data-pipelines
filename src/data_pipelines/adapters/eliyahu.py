@@ -67,7 +67,9 @@ def _retry_after_seconds(response: httpx.Response) -> float:
     return max((target - datetime.now(UTC)).total_seconds(), 1.0)
 
 
-def _get(url: str, *, params: dict[str, int] | None = None) -> httpx.Response:
+def _get(
+    url: str, *, params: dict[str, int] | None = None, progress: Progress | None = None
+) -> httpx.Response:
     response = None
     for attempt in range(_MAX_RETRIES):
         try:
@@ -80,7 +82,18 @@ def _get(url: str, *, params: dict[str, int] | None = None) -> httpx.Response:
         if response.status_code != 429:
             time.sleep(_REQUEST_DELAY_S)
             return response
-        time.sleep(_retry_after_seconds(response))
+        wait = _retry_after_seconds(response)
+        # Cloudflare's Retry-After on this site has been observed as high as ~10
+        # minutes, and _MAX_RETRIES retries at that length could add up to the
+        # better part of an hour — printed rather than slept through silently, since
+        # a caller watching a stalled-looking terminal has no other way to tell
+        # "waiting out a real rate limit" apart from "hung".
+        message = f"harav.org rate-limited us — waiting {wait:.0f}s before retrying"
+        if progress is not None:
+            progress.console.print(message)
+        else:
+            print(message)
+        time.sleep(wait)
     assert response is not None
     response.raise_for_status()
     return response
@@ -111,13 +124,20 @@ class ElyahuQAAdapter(DirectUrlAdapter):
         known_external_ids: AbstractSet[str] = frozenset(),
         progress: Progress | None = None,
     ) -> Iterator[LessonCandidate]:
-        # Listing every RSS page is cheap (3 pages for the whole archive) and has to
-        # happen regardless, since a genuinely new item could appear anywhere in it —
-        # collected up front so the progress bar's total is exact from the start
-        # rather than growing as pages come in.
-        items = list(self._list_items())
-        task = progress.add_task(label("Eliyahu Q&A"), total=len(items)) if progress is not None else None
+        # Task starts as an indeterminate spinner (total=None) rather than being
+        # created only after listing finishes: RSS pagination itself makes network
+        # calls (page fetches, each subject to the same rate limit/retry as item
+        # fetches below) and previously had no visible progress at all while it ran —
+        # indistinguishable from a hang if that phase is slow.
+        task = progress.add_task(label("Eliyahu Q&A"), total=None) if progress is not None else None
         try:
+            # Listing every RSS page is cheap (3 pages for the whole archive) and has
+            # to happen regardless, since a genuinely new item could appear anywhere
+            # in it — collected up front so the bar's total is exact once known,
+            # rather than growing as pages come in.
+            items = list(self._list_items(progress=progress))
+            if progress is not None and task is not None:
+                progress.update(task, total=len(items))
             for feed_item in items:
                 if progress is not None and task is not None:
                     progress.advance(task)
@@ -127,17 +147,17 @@ class ElyahuQAAdapter(DirectUrlAdapter):
                 # only the RSS pagination, not one request per already-known item.
                 if feed_item.external_id in known_external_ids:
                     continue
-                candidate = self._resolve_candidate(feed_item)
+                candidate = self._resolve_candidate(feed_item, progress=progress)
                 if candidate is not None:
                     yield candidate
         finally:
             if progress is not None and task is not None:
                 progress.remove_task(task)
 
-    def _list_items(self) -> Iterator[_FeedItem]:
+    def _list_items(self, *, progress: Progress | None = None) -> Iterator[_FeedItem]:
         page = 1
         while True:
-            response = _get(SEARCH_RSS_URL, params={"paged": page})
+            response = _get(SEARCH_RSS_URL, params={"paged": page}, progress=progress)
             # A page past the last one 404s (still with an RSS-shaped, itemless body)
             # rather than 200-ing with an empty feed — checked against the live site.
             if response.status_code == 404:
@@ -166,10 +186,12 @@ class ElyahuQAAdapter(DirectUrlAdapter):
                 )
             page += 1
 
-    def _resolve_candidate(self, feed_item: _FeedItem) -> LessonCandidate | None:
+    def _resolve_candidate(
+        self, feed_item: _FeedItem, *, progress: Progress | None = None
+    ) -> LessonCandidate | None:
         # Not every search hit is an audio Q&A (some are text-only pages) — an item
         # page with no matching mp3 link is silently skipped, not an error.
-        page_response = _get(feed_item.link)
+        page_response = _get(feed_item.link, progress=progress)
         page_response.raise_for_status()
         match = _MP3_RE.search(page_response.text)
         if match is None:

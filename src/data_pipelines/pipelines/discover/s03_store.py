@@ -77,7 +77,14 @@ def store_lesson_audio(session: Session, series: Series, lesson: Lesson, cache_r
 
     cache_path = cache_root / storage_key
     cache_path.parent.mkdir(parents=True, exist_ok=True)
-    staged.replace(cache_path)
+    if not cache_path.exists():
+        # A prior run can have completed this move and then been interrupted before
+        # the commit below landed — the lesson still looks "needs store" next time
+        # (lesson_downloads row present, no audio_files row yet), but by then staged
+        # is already gone, having been moved here. Skipping a redundant move lets a
+        # retry pick up from wherever it actually left off instead of crashing on a
+        # missing file that's simply already in place.
+        staged.replace(cache_path)
 
     content_hash = _hash_file(cache_path)
     duration_s = _probe_duration_s(cache_path)
@@ -103,7 +110,7 @@ def store_all(session: Session, series_list: list[Series], cache_root: Path) -> 
     with make_progress() as progress:
         task = progress.add_task("Storing", total=len(pending))
         for series, lesson in pending:
-            progress.update(task, description=f"Storing [bold]{series.slug}[/]  {lesson.title_he}")
+            progress.update(task, description=f"Storing [bold]{series.slug:30}")
             audio_file = store_lesson_audio(session, series, lesson, cache_root)
             progress.console.print(f"{series.slug}  {lesson.external_id}  -> {audio_file.storage_key}")
             counts[series.slug] += 1
