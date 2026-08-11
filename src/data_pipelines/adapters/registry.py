@@ -10,6 +10,7 @@ from data_pipelines.adapters.butbul import (
     ButbulSichatHulinAdapter,
     ButbulWeeklyLessonAshkelonAdapter,
 )
+from data_pipelines.adapters.eliyahu import ElyahuQAAdapter
 from data_pipelines.db import Series
 
 ADAPTERS: dict[str, type[SeriesAdapter]] = {
@@ -17,12 +18,13 @@ ADAPTERS: dict[str, type[SeriesAdapter]] = {
     "ButbulSichatHulin": ButbulSichatHulinAdapter,
     "ButbulWeeklyLessonAshkelon": ButbulWeeklyLessonAshkelonAdapter,
     "ButbulDailyHalacha": ButbulDailyHalachaAdapter,
+    "ElyahuQA": ElyahuQAAdapter,
 }
 
 
 def get_adapter(series: Series) -> SeriesAdapter | None:
     """None if series.adapter_key isn't registered yet — e.g. a series seeded from
-    the catalogue (documents/plans/adapters-plan.md lists six; only the four Butbul
-    ones are built so far). Callers should skip the series, not crash."""
+    the catalogue (documents/plans/adapters-plan.md lists six; Ariel's is the only
+    one not yet built). Callers should skip the series, not crash."""
     adapter_cls = ADAPTERS.get(series.adapter_key)
     return adapter_cls(series) if adapter_cls is not None else None

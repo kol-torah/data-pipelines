@@ -8,6 +8,7 @@ Run with: uv run python -m data_pipelines.pipelines.discover.s01_discover [serie
 
 import argparse
 
+from rich.progress import Progress
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
@@ -15,19 +16,21 @@ from data_pipelines.adapters.base import SeriesAdapter
 from data_pipelines.adapters.registry import get_adapter
 from data_pipelines.config import get_settings
 from data_pipelines.db import Lesson, Series
-from data_pipelines.pipelines.discover.progress import make_progress
 from data_pipelines.pipelines.discover.series import series_to_run
 from data_pipelines.pipelines.discover.text import pluralize
+from data_pipelines.progress import make_progress
 
 
-def discover_new_lessons(session: Session, series: Series, adapter: SeriesAdapter) -> tuple[list[Lesson], int]:
+def discover_new_lessons(
+    session: Session, series: Series, adapter: SeriesAdapter, *, progress: Progress | None = None
+) -> tuple[list[Lesson], int]:
     """Insert any candidate whose external_id isn't already known for this series.
     Returns the newly-inserted lessons plus how many were already known beforehand."""
     existing_ids = set(
         session.scalars(select(Lesson.external_id).where(Lesson.series_id == series.id))
     )
     new_lessons = []
-    for candidate in adapter.discover():
+    for candidate in adapter.discover(known_external_ids=existing_ids, progress=progress):
         if candidate.external_id in existing_ids:
             continue
         lesson = Lesson(
@@ -58,7 +61,7 @@ def discover_all(session: Session, series_list: list[Series]) -> None:
                 )
                 progress.advance(task)
                 continue
-            new_lessons, existing_count = discover_new_lessons(session, series, adapter)
+            new_lessons, existing_count = discover_new_lessons(session, series, adapter, progress=progress)
             progress.console.print(
                 f"{series.slug}: {existing_count} existing, {pluralize(len(new_lessons), 'new lesson')}"
             )

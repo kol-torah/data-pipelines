@@ -45,10 +45,10 @@ from data_pipelines.adapters.base import SeriesAdapter
 from data_pipelines.adapters.registry import get_adapter
 from data_pipelines.config import get_settings
 from data_pipelines.db import AudioFile, Lesson, LessonDownload, Series
-from data_pipelines.pipelines.discover.progress import label, make_progress
 from data_pipelines.pipelines.discover.series import series_to_run
 from data_pipelines.pipelines.discover.storage import list_existing_audio
 from data_pipelines.pipelines.discover.text import pluralize
+from data_pipelines.progress import label, make_progress
 
 STAGING_SUBDIR = "staging"
 

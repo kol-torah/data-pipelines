@@ -13,7 +13,7 @@ from rich.progress import Progress
 
 from data_pipelines.config import get_settings
 from data_pipelines.db import Lesson, Series
-from data_pipelines.pipelines.discover.progress import label
+from data_pipelines.progress import label
 
 # Custom S3 object metadata keys. Attached at upload time so a later lookup can
 # reconstruct an audio_files row from the object alone, without downloading it.

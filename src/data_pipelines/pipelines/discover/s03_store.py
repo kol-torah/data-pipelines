@@ -23,10 +23,10 @@ from sqlalchemy.orm import Session
 
 from data_pipelines.config import get_settings
 from data_pipelines.db import AudioFile, Lesson, LessonDownload, Series
-from data_pipelines.pipelines.discover.progress import make_progress
 from data_pipelines.pipelines.discover.series import series_to_run
 from data_pipelines.pipelines.discover.storage import storage_key_prefix, upload_to_bucket
 from data_pipelines.pipelines.discover.text import pluralize
+from data_pipelines.progress import make_progress
 
 
 def lessons_needing_store(session: Session, series: Series) -> list[Lesson]:

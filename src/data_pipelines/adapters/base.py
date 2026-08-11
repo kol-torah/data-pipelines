@@ -2,10 +2,12 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
+from collections.abc import Set as AbstractSet
 from datetime import datetime
 from pathlib import Path
 
 from pydantic import BaseModel
+from rich.progress import Progress
 
 from data_pipelines.db.models import Lesson, Series
 
@@ -27,10 +29,26 @@ class SeriesAdapter(ABC):
         self.series = series
 
     @abstractmethod
-    def discover(self) -> Iterator[LessonCandidate]:
-        """Yield every lesson currently visible at the source — always a full
-        listing, never incremental. Idempotency is the caller's job (the
-        discover_new_lessons pipeline stage)."""
+    def discover(
+        self,
+        *,
+        known_external_ids: AbstractSet[str] = frozenset(),
+        progress: Progress | None = None,
+    ) -> Iterator[LessonCandidate]:
+        """Yield every *new* lesson currently visible at the source. Listing is
+        always a full listing, never incremental — but for a source where seeing a
+        single candidate costs its own network round-trip (e.g. Eliyahu's two-hop
+        discovery), known_external_ids lets the adapter skip that per-item cost
+        entirely for ids the caller already has, rather than paying for it and
+        discarding the result. It's a hint, not a contract: an adapter whose
+        discovery is already cheap in one shot (e.g. YouTubePlaylistAdapter) may
+        ignore it and yield everything, since discover_new_lessons filters on
+        external_id regardless.
+
+        progress, if given, is a live display the caller is already rendering — an
+        adapter whose discover() does meaningfully many steps should add its own
+        task(s) to it (and remove them when done) rather than opening a second,
+        competing display."""
 
     @abstractmethod
     async def download(self, lesson: Lesson) -> Path:
