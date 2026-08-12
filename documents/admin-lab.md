@@ -168,9 +168,7 @@ see §4.3. Unaffected by the React/backend split in §1.2: the backend API proce
   (a heuristic, computed client-side — see §4.7) and the raw speaker label
   (`SPEAKER_00`, `SPEAKER_03`, ...) as text alongside it. Diarization quality itself is
   still unknown at this point — showing both is what lets an operator tell whether the
-  heuristic is right by checking it against the raw labels, not just trust it. Both
-  lists are virtual-scrolled rather than paginated, with a shared ±15-minute jump
-  control above them — see §4.8.
+  heuristic is right by checking it against the raw labels, not just trust it.
 - **Log view.** The captured stdout/stderr of any completed job (success or failure), in
   a collapsed-by-default panel (§4.5).
 - **Catalogue admin.** Rabbi/series/lesson CRUD, carried over from `admin_app.py` (§1.4).
@@ -558,3 +556,10 @@ argument.
   unknown — total-duration-per-label is the starting guess (`design.md` §3's finding on
   one test lesson), not a validated rule. Expect this to change once diarization has run
   on more than one lesson; §4.7's client-side-only choice is what makes that cheap.
+- **Long-lesson handling.** A two-hour Q&A show produces hundreds of segments; no
+  pagination or length warning is designed yet — though a real frontend with proper list
+  virtualization should handle this more easily than the Streamlit version would have.
+- **Ground truth / WER.** Useful once parameter tuning starts in earnest; not needed to
+  try the models for the first time.
+- **Live log streaming.** Deferred per §4.5, only worth building if the write-once
+  version turns out to lose something a hard kill would have shown.
