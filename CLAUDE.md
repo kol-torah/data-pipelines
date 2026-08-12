@@ -28,6 +28,14 @@ non-secret values (model names, params) come from the committed `config.toml`. B
 loaded into one typed `Settings` object — see `src/data_pipelines/config.py`. Don't read
 `os.environ` directly elsewhere in the codebase.
 
+**Same rule on the frontend** (`frontend/`, see `documents/admin-lab.md`): TypeScript's
+`any` is not a default either. It's allowed only for a specific, documented reason (a
+comment at the point of use), same bar as `dict[str, Any]` above — prefer a real
+interface/type. Where a type mirrors a backend Pydantic model (e.g. `TranscriptionResult`
+in `documents/admin-lab.md` §4.2), generating it from the API's OpenAPI schema rather
+than hand-duplicating it is worth doing once there's a schema to generate from — one
+source of truth for the shape, not two definitions that can drift.
+
 ## LLM calls
 
 All LLM calls go through LiteLLM (design.md §4) — don't hand-roll per-provider HTTP

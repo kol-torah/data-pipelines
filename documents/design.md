@@ -141,12 +141,71 @@ thousands of GPU-hours of prior work.
 
 ### Platform note
 
-The machine is **aarch64**, not x86. Large local LLMs (Gemma 4, Qwen 3.6, both tens of
-billions of parameters) already run on it at acceptable speed, so the CUDA and PyTorch
-stack is proven. The one open item is `ctranslate2`, the backend behind `faster-whisper`,
-whose ARM64 + CUDA wheel availability is historically unreliable. This is a throughput
-optimisation rather than a blocker — plain `transformers` inference will work regardless
-— but it should be tested early since it affects backfill scheduling.
+The machine is **aarch64**, not x86, and runs **CUDA 13**. Large local LLMs (Gemma 4,
+Qwen 3.6, both tens of billions of parameters) already run on it via Ollama at acceptable
+speed, but Ollama's bundled runtime says nothing about whether a `pip`-installed
+PyTorch/CUDA stack works — that had to be checked separately.
+
+**Engine: plain `transformers` inference, until further notice.** Tested directly against
+`ivrit-ai/whisper-large-v3-turbo` on a real ~40-minute lesson: `torch` installs cleanly
+with working CUDA (device detected as `NVIDIA GB10`, compute capability 12.1), and
+transcription ran at roughly **20x real-time** (2400s of audio in ~122s) using **~3.4 GB**
+of GPU memory in fp16 — far under the 128 GB ceiling, so cost/throughput is a non-issue
+(G2) and there's no pressure to optimise further.
+
+Two alternatives were tried and rejected for now:
+
+- **`faster-whisper` (via `ctranslate2`).** The aarch64 wheel on PyPI installs but is
+  **CPU-only** — confirmed both directly (`ctranslate2.get_cuda_device_count() == 0`) and
+  through `faster-whisper` itself, which raises `"This CTranslate2 package was not
+  compiled with CUDA support"` on `device="cuda"`. Root cause: `ctranslate2`'s CUDA
+  builds target **CUDA 12**, and this machine runs **CUDA 13**. A source build with CUDA
+  enabled is possible in principle but would mean maintaining two CUDA runtimes side by
+  side, which we're not willing to do. **Revisit once `ctranslate2` ships a CUDA 13
+  build** — no code should assume this engine is unavailable forever, just that it isn't
+  usable today.
+- **`insanely-fast-whisper`.** Installs without needing `flash-attn` (which has no aarch64
+  wheels and isn't a hard dependency), but in practice pegged the CPU at 100% while GPU
+  utilisation sat at 2-4% — it isn't actually running on the GPU on this platform. Not
+  worth debugging further given `transformers` already meets G2 on its own; dropped.
+
+### Diarization
+
+**Model:** [`ivrit-ai/pyannote-speaker-diarization-3.1`](https://huggingface.co/ivrit-ai/pyannote-speaker-diarization-3.1)
+via `pyannote.audio`, using ivrit.ai's own segmentation fine-tune
+(`ivrit-ai/pyannote-segmentation-3.0`) and `AgglomerativeClustering` (the pipeline's
+configured clustering method — cosine-distance based, not PLDA-scored). Chosen over the
+stock `pyannote/speaker-diarization-3.1` pipeline because ivrit.ai's fork and its
+segmentation model are both **MIT-licensed and ungated**, while the stock pipeline
+requires accepting Hugging Face's gated-repo terms.
+
+**A Hugging Face token is required anyway**, for an unrelated reason: `pyannote.audio`
+4.x's `SpeakerDiarization.__init__` unconditionally loads a PLDA scoring component from
+`pyannote/speaker-diarization-community-1` (a separate, gated repo) regardless of which
+clustering method is configured — even though `AgglomerativeClustering` never reads it.
+A workaround exists (monkeypatching the loader to skip the unused download) and was
+tested successfully, but the token is the supported path and doesn't depend on
+`pyannote.audio` internals that could shift across versions, so that's what we're using.
+`HF_TOKEN` goes in `.env` like any other secret, per the config convention in `CLAUDE.md`
+— never a bare environment variable read ad hoc.
+
+**Speed:** tested directly on the same ~40-minute lesson used for the transcription
+tests: **~110s, roughly 22x real-time** — the same speed class as transcription, so
+diarization adds no meaningful throughput pressure (G2).
+
+**Speaker identity does not need to be accurate — only host-vs-not does.** The only
+thing the pipeline needs from diarization is enough structure to tell a question from a
+follow-up from an answer; it does not need to reliably re-identify the same caller across
+turns. On the test lesson, the pipeline reported 9 distinct speaker labels for what is
+almost certainly a host plus a handful of phone-in callers — over-segmentation on
+caller-quality audio, a known pyannote failure mode. This is acceptable as-is: the host
+was identified consistently as a single dominant label throughout, which is the property
+that actually matters. No clustering-parameter tuning is planned unless this assumption
+turns out to be wrong in practice.
+
+**Merging diarization output with the transcript** (assigning a speaker label to each
+transcript segment by timestamp overlap) is deferred to the main pipeline implementation
+— it wasn't built as part of this lab experimentation.
 
 ---
 
