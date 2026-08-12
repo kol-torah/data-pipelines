@@ -1,7 +1,7 @@
 # Kol Torah — Data Pipeline Architecture
 
 **Status:** Draft for review
-**Last updated:** 2026-08-09
+**Last updated:** 2026-08-12
 
 ---
 
@@ -33,7 +33,7 @@ These drove the decisions below. If one changes, re-read the sections it touches
 | G5 | Processing must be resumable and idempotent per lesson                      | Per-lesson, per-stage state in Postgres                         |
 | G6 | Reverse lookup from a verse/*daf* to a lesson span                          | Canonical references plus timestamped spans, not free text      |
 | G7 | Postgres in Docker, data persisted outside the container                    | Bind-mounted volume; backup scripts operate on the host         |
-| G8 | The lab is authenticated                                                    | Google IdP via OIDC                                             |
+| G8 | The lab/admin tool runs locally, single-operator, no hosted deployment yet | No auth built for now; revisit if a hosted deployment happens (`admin-lab.md` §1.3) |
 | G9 | Audio is durable and re-processable without re-downloading from source      | Object storage bucket as the system of record for audio         |
 
 ---
@@ -353,34 +353,42 @@ how much the LLM stage is actually buying. This is the intended first lab experi
 
 ## 7. Storage
 
-### 7.1 Databases
+### 7.1 One database, two schemas
 
-**Two Postgres databases with identical layout**, distinguished only by connection string:
+**One Postgres database (`kol_torah`), two schemas** — not two separate databases, a
+decision this document previously made and now reverses. `public` holds production
+pipeline state and output, described throughout this document. `lab` holds
+experimentation tables, starting with `lab_jobs` (`admin-lab.md` §5.1).
 
-| Database         | Purpose                                                |
-| ---------------- | ------------------------------------------------------ |
-| `kol_torah`      | Production pipeline state and output                   |
-| `kol_torah_lab`  | Experimentation, seeded from a subset of production     |
+| Schema   | Purpose                                                 |
+| -------- | -------------------------------------------------------- |
+| `public` | Production pipeline state and output                     |
+| `lab`    | Experimentation — additive, never promoted (§8.5)         |
 
 Postgres runs in Docker with its data directory bind-mounted to the host (G7).
 
-**Identical layout is the load-bearing property.** It means pipeline code is byte-identical
-in both environments — no lab-specific branches — so an experiment exercises the real
-production code path rather than an approximation of it. It also means the lab UI is the
-same application pointed at a different database.
+**Why the reversal:** the original two-database design (`kol_torah`/`kol_torah_lab`,
+identical layout, a seeding script) exists to isolate experimentation from a live
+production system. There is no live production system yet — `kol_torah` is currently
+the only environment there is — so the isolation machinery (seeding, cross-database ID
+handling, a second connection string) was being built against a problem that doesn't
+exist. A `lab` schema gets the same practical separation without that cost:
+`lab.lab_jobs` has a normal foreign key straight to `public.lessons.id`, no seeding, no
+copying. Full reasoning in `admin-lab.md` §1.1. **Revisit once a real production
+environment exists** separate from this dev database — the original isolation
+requirement becomes real again at that point.
 
-Two consequences follow:
+Two consequences from the original design still stand, independent of the database
+split:
 
-- **Run tracking lives in the shared schema.** Production processing passes are also runs,
-  recorded identically. This was adopted to preserve identical layout and turns out to be
-  independently desirable: thousands of lessons times several LLM calls each is real
-  money, and per-stage timing and cost in production is exactly the observability needed
-  to manage it. The lab views work unchanged against production.
-- **Artifacts are run-scoped in both databases.** The lab needs several summaries per
-  lesson to compare; identical layout therefore requires run-scoping in production too,
-  with an active-run pointer marking the canonical one. This makes production
-  reprocessing additive rather than destructive — a bad batch is a pointer change to roll
-  back, not a restore from backup.
+- **Production run tracking is still worth building** — the `runs`/`stage_runs` sketch
+  in §7.2. Thousands of lessons times several LLM calls each is real money; per-stage
+  timing and cost is the observability needed to manage it. This is a different
+  mechanism from `lab.lab_jobs`, which tracks lab-triggered experiments only, lives in
+  the `lab` schema, and is never promoted into `public` (§8.5, `admin-lab.md` §5.4).
+- **Artifacts should be run-scoped in production**, with an active-run pointer marking
+  the canonical one — a bad batch becomes a pointer change to roll back, not a restore
+  from backup.
 
 ### 7.2 Schema sketch
 
@@ -415,11 +423,15 @@ chunks           (id, lesson_id, run_id, start_ms, end_ms, text, embedding)
 Audio lives in an object storage bucket (G9); the database stores the URI and content
 hash, never the bytes.
 
+`lab.lab_jobs` (`admin-lab.md` §5.1) is a separate, simpler mechanism for lab-triggered
+experiments, not an early version of `runs`/`stage_runs` above — see §7.1.
+
 ### 7.3 Backups
 
 `pg_dump` of `kol_torah` on a schedule, run from the host against the bind-mounted
-volume. `kol_torah_lab` is disposable and is not backed up — it can be re-seeded from
-production at any time.
+volume, scoped to the `public` schema (`-n public`) — the `lab` schema (§7.1) is
+disposable experimental content, and backing it up would just grow backup volume for
+data nobody needs recovered. Losing it means re-running the lab, not data loss.
 
 Audio durability is the bucket's responsibility, not the backup script's. The bucket is
 the reason a lost database is recoverable at all: transcripts can be regenerated from
@@ -429,61 +441,81 @@ audio, but audio cannot be regenerated from anything.
 
 ## 8. The lab
 
+The first concrete instance of this — job types, data model, module layout — is specced
+in `admin-lab.md`; this section states the principles and constraints, not the
+implementation. `admin-lab.md` also folds in catalogue admin and UI prototyping for the
+main site, both out of scope for this section.
+
 ### 8.1 Model
 
-The lab is a **viewer over the runs tables**, not the owner of results. This is the
+The lab is a **viewer over its own job records**, not the owner of results. This is the
 central constraint and everything else follows from it.
 
-Streamlit re-executes its script top to bottom on every widget interaction, and session
-state does not survive a reload. If results lived in Streamlit's memory, editing code and
-re-running would destroy the baseline being compared against — precisely at the moment it
-is needed. Because results live in Postgres, the lab is stateless: edit, restart, re-run,
-and run #3 is still there to compare against run #7.
+If results lived only in the frontend's own memory, restarting it — during development,
+or just from closing the tab — would destroy the baseline being compared against,
+precisely at the moment it's needed. Because results live in Postgres (`lab.lab_jobs`,
+§7.1), the lab is stateless: edit, restart, reload, and run #3 is still there to compare
+against run #7.
 
-The same constraint means **the lab never executes the pipeline in-process.** A run over
-twenty lessons takes minutes; running it synchronously would block the UI and let any
-stray interaction restart it mid-flight. The lab triggers a run — as a subprocess or a
-queued row picked up by a worker — and polls Postgres. Per-stage timing and cost appear
-as rows land, which gives live progress for free.
+The same constraint means **the lab never executes a pipeline stage in-process.** A run
+can take minutes; running it synchronously would block the tool and let a stray restart
+kill it mid-flight. The lab triggers a run as a tracked subprocess and polls for status.
+Per-job status and results appear as that row updates, which gives live progress for
+free.
 
 **Every run records the code version** — git SHA plus a dirty flag, captured at run start.
 Without it there are two runs that differ with no record of how.
 
 ### 8.2 Stack
 
-**Streamlit**, with built-in OIDC for Google login (G8) — configuration rather than
-code. Chosen because the lab's core question is *"which of these configurations is best
-across these lessons?"*, which is a table: rows, columns, sorting, filtering, side-by-side
-comparison. Streamlit does that natively.
+**React frontend, Python (FastAPI) backend API** — revises an earlier decision. This
+document previously specified Streamlit, with built-in OIDC for Google login (G8),
+picked because the lab's core question — *"which of these configurations is best across
+these lessons?"* — is a table: rows, columns, sorting, filtering, side-by-side
+comparison, which Streamlit does natively. That reasoning still holds for the
+comparison-table parts of the lab. It stops holding for two things the combined
+admin+lab tool (`admin-lab.md` §1) also needs: a continuously-playing audio player that
+seeks instantly on click (Streamlit's rerun-per-interaction model can't do that without
+reloading the player), and a UI-prototyping ground for the main website's components,
+which has no home in Streamlit at all. Full reasoning in `admin-lab.md` §1.2.
 
-Accepted trade-off: it is a different stack from the main web application, and it will not
-scale to many concurrent users. Neither matters for an internal tool with one operator.
+No OIDC for now (G8, revised) — this runs locally, for one operator; there's nothing to
+authenticate against yet. Revisit alongside the database question (§7.1) once there's an
+actual shared/hosted deployment.
 
-**Chainlit is the intended stack for the agentic search prototype** when that work
-starts. That feature is a conversation over preprocessed lessons with tool-use steps
-worth visualising, which is exactly what Chainlit is for and exactly what Streamlit is
-not. The two coexist; neither is the right tool for the other's job.
+Accepted trade-off, unchanged from the original decision: this is a different stack from
+the main web application, and it will not scale to many concurrent users. Neither
+matters for an internal tool with one operator.
+
+**Chainlit's role is still undecided.** It was the intended stack for the agentic search
+prototype, for the same reason Streamlit was picked for the lab — the right tool for a
+conversation-with-tool-use interface, not a table. Whether that's still the plan now
+that the lab is React is an open question, to be settled when that prototype work
+actually starts, not before.
 
 ### 8.3 Views
 
 1. **Configure** — choose models, prompts, algorithm variants, and the lesson set; launch.
-2. **Watch** — poll `stage_runs`; per-stage timing, tokens, and cost as rows arrive.
-3. **Compare** — dataframe across runs, filter by stage, sort by cost or duration, diff
-   outputs side by side. Audio playback synced to transcript timestamps where useful.
+2. **Watch** — poll job status (`lab_jobs`, §7.1); per-job timing, tokens, and cost as
+   they land.
+3. **Compare** — table across runs, filter, sort by cost or duration, diff outputs side
+   by side. Audio playback synced to transcript timestamps (`admin-lab.md` §2/§4.8).
 
-All three are reads against Postgres. The pipeline code never imports Streamlit.
+All three are reads against Postgres. Pipeline/job logic itself (e.g. `admin-lab.md`
+§6's `transcribe.py`/`diarize.py`) never imports the web framework on either side — it's
+plain Python, callable the same way from a script, a test, or the lab.
 
-### 8.4 Seeding
+### 8.4 Lesson selection
 
-A subset script copies production rows into the lab: chosen lessons plus their
-transcripts and segments. **Audio is referenced, not copied** — the lab points at the
-same bucket URIs with read-only credentials. The experimental stages never open the
-files, so there is no reason to move gigabytes to re-seed.
+**Revises an earlier decision.** This document previously specified a subset-seeding
+script, copying chosen lessons into `kol_torah_lab`. With one database (§7.1), there's
+nothing to seed — the lab queries `public.lessons` directly, live, filtered rather than
+copied.
 
 **Selection is flexible and intentional, never random.** Different questions need
 different lesson sets: one source when debugging a scraper, one content type when tuning
 a summarisation prompt, a deliberately mixed set when checking that a change does not
-regress elsewhere. The script grows selectors as needs emerge — by source, by content
+regress elsewhere. The filter grows selectors as needs emerge — by source, by content
 type, by rabbi, by explicit id list.
 
 The lab is not expected to run over more than a few dozen lessons, ever. Scale is not a
@@ -505,10 +537,13 @@ Decision documents live in the repository, one numbered entry per decision, reco
 the question, the configurations compared, which lessons were used and why, summarised
 results and costs, and the decision with its reasoning.
 
-**Decision documents do not reference run ids.** A run id is meaningless outside the lab
-database, which is periodically re-seeded. Where exact numbers are worth preserving, the
-run's results are exported to a JSON file committed alongside the document. That keeps
-the reasoning auditable without requiring a live database.
+**Decision documents do not reference run ids.** A `lab_jobs` row isn't guaranteed to
+still exist by the time anyone reads the decision later — cleaning out old lab content
+is a manual operator choice, not an automated policy (`admin-lab.md` §5.4), so nothing
+here can rely on a row persisting, but nothing should assume it's been cleaned up either.
+Where exact numbers are worth preserving, the run's results are exported to a JSON file
+committed alongside the document. That keeps the reasoning auditable without requiring a
+live database row.
 
 ---
 
@@ -546,8 +581,9 @@ the reasoning auditable without requiring a live database.
 
 Enforce these in code review or CI, not by memory.
 
-1. Pipeline code contains no branch on whether it is running against the lab or
-   production database. The only difference is the connection string.
+1. Pipeline/job code (e.g. `transcribe.py`, `diarize.py`) contains no branch on whether
+   it's being invoked by a lab job or a production pipeline stage — job-tracking and
+   result-persistence live in the calling harness, not the stage code itself.
 2. The lab application never executes a pipeline stage in-process.
 3. Every LLM call records normalised usage, the raw provider payload, and a cost frozen
    at write time.

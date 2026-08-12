@@ -558,7 +558,3 @@ argument.
   unknown — total-duration-per-label is the starting guess (`design.md` §3's finding on
   one test lesson), not a validated rule. Expect this to change once diarization has run
   on more than one lesson; §4.7's client-side-only choice is what makes that cheap.
-- **Ground truth / WER.** Useful once parameter tuning starts in earnest; not needed to
-  try the models for the first time.
-- **Live log streaming.** Deferred per §4.5, only worth building if the write-once
-  version turns out to lose something a hard kill would have shown.
