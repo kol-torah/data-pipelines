@@ -1,3 +1,4 @@
+import { NavLink } from 'react-router-dom'
 import markUrl from '../assets/logo/mark.svg'
 
 // .kt-header/.kt-logo/.kt-wordmark, vendored from ../documentation/design/ui
@@ -12,6 +13,14 @@ export function Header() {
       <span className="kt-meta" style={{ flex: 1 }}>
         מעבדה — עיבוד שיעורים
       </span>
+      <nav className="kt-admin-nav">
+        <NavLink to="/rabbis" className={({ isActive }) => (isActive ? 'is-active' : undefined)}>
+          רבנים
+        </NavLink>
+        <NavLink to="/series" className={({ isActive }) => (isActive ? 'is-active' : undefined)}>
+          סדרות
+        </NavLink>
+      </nav>
     </header>
   )
 }

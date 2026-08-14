@@ -1,6 +1,12 @@
 # Plan: admin app — drill-down navigation, lesson status, series reset
 
-**Status:** Planned — not yet implemented.
+**Status: superseded.** These three features (drill-down navigation, lesson status,
+series reset) were built against the Streamlit `admin_app.py` this plan specced, but
+`admin_app.py` was retired before that happened. `documents/plans/admin-lab-plan.md`
+Phase 2 (§3) absorbed this work directly into the new React/FastAPI admin tool instead —
+see `src/data_pipelines/db/status.py` (§3 below, implemented verbatim) and
+`src/data_pipelines/admin_lab_api/routers/catalogue.py`. Kept here for historical
+context only; no longer updated as the code evolves.
 **Code to touch:** `src/data_pipelines/admin_app.py`; reuses
 `src/data_pipelines/pipelines/discover/reset_series.py` unchanged.
 

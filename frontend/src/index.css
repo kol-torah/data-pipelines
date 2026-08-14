@@ -5,3 +5,4 @@
 @import "tailwindcss";
 @import "./styles/kt/tokens.css";
 @import "./styles/kt/base.css";
+@import "./styles/kt/admin.css";

@@ -1,0 +1,65 @@
+/* App-specific additions on top of the vendored kt-* files (admin-lab-plan.md §3.3).
+   Kept separate from tokens.css/base.css so a future re-sync from the design repo
+   doesn't clobber these. Built from tokens.css's existing values only — no new
+   colors or radii. Logical properties throughout (RTL-first, §0.1). */
+
+/* ============ Data table (no bundle-designed CRUD table — reuse .kt-row's
+   border+padding rhythm, drop the timestamp column and active-row treatment) ============ */
+.kt-table { display: flex; flex-direction: column; }
+.kt-trow {
+  display: flex; align-items: center; gap: var(--kt-space-4);
+  padding: var(--kt-space-3) 0; border-top: 1px solid var(--kt-rule);
+}
+.kt-table > .kt-trow:last-child { border-bottom: 1px solid var(--kt-rule); }
+.kt-trow--head { font-size: var(--kt-size-small); color: var(--kt-text-subtle); font-weight: 600; }
+.kt-trow--link { cursor: pointer; }
+.kt-trow--link:hover { background: var(--kt-gold-soft); }
+.kt-tcell { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.kt-tcell--actions { flex: 0 0 auto; display: flex; gap: var(--kt-space-2); }
+/* .kt-time sets direction: ltr, which left-aligns by default — fine in the vendored
+   fixed-width .kt-row-time slot, but leaves a left-aligned gap in our full-width
+   flex table cells. Same reasoning as the ltr form fields above. */
+.kt-tcell.kt-time { text-align: end; }
+
+/* ============ Forms — same gap: input/label styling built from token values ============ */
+.kt-form { display: flex; flex-direction: column; gap: var(--kt-space-4); }
+.kt-field { display: flex; flex-direction: column; gap: var(--kt-space-1); }
+.kt-field label { font-size: var(--kt-size-small); color: var(--kt-text-subtle); font-weight: 500; }
+.kt-field input, .kt-field textarea, .kt-field select {
+  font: inherit; padding: var(--kt-space-2) var(--kt-space-3);
+  border: 1px solid var(--kt-border); border-radius: var(--kt-radius-md);
+  background: var(--kt-surface); color: var(--kt-text);
+}
+.kt-field input:focus, .kt-field textarea:focus, .kt-field select:focus {
+  outline: 2px solid var(--kt-green); outline-offset: 1px;
+}
+/* English-only fields keep dir="ltr" (correct LTR cursor/selection behavior for
+   typing a slug/English name), but text-align: end resolves to "right" for an
+   ltr-direction element — so the field still hugs the form's right edge like
+   every Hebrew field instead of leaving a left-aligned gap in an RTL form. */
+.kt-field input[dir="ltr"], .kt-field textarea[dir="ltr"] { text-align: end; }
+.kt-form-actions { display: flex; gap: var(--kt-space-3); }
+
+/* ============ Banners ============ */
+.kt-filter-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--kt-space-3);
+  background: var(--kt-gold-soft); border-radius: var(--kt-radius-md);
+  padding: var(--kt-space-2) var(--kt-space-4); font-size: var(--kt-size-small); color: var(--kt-text-subtle);
+  margin-bottom: var(--kt-space-4);
+}
+.kt-banner--success {
+  background: var(--kt-gold-soft); border-radius: var(--kt-radius-md);
+  padding: var(--kt-space-3) var(--kt-space-4); color: var(--kt-green-deep); font-weight: 500;
+  margin-bottom: var(--kt-space-4);
+}
+.kt-error { color: var(--kt-rubric); font-size: var(--kt-size-small); }
+
+/* ============ Nav ============ */
+.kt-admin-nav { display: flex; gap: var(--kt-space-4); }
+.kt-admin-nav a { color: var(--kt-text-subtle); font-weight: 500; }
+.kt-admin-nav a.is-active, .kt-admin-nav a:hover { color: var(--kt-green); }
+
+/* ============ Confirm dialog (native <dialog>, §3.3 — no Headless UI needed) ============ */
+dialog.kt-dialog { border: none; border-radius: var(--kt-radius-lg); padding: 0; max-width: 420px; }
+dialog.kt-dialog::backdrop { background: rgb(0 0 0 / 0.35); }
+dialog.kt-dialog .kt-card { border-radius: var(--kt-radius-lg); display: flex; flex-direction: column; gap: var(--kt-space-4); }
