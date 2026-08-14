@@ -8,6 +8,11 @@ from alembic import context
 from data_pipelines.config import get_settings
 from data_pipelines.db.base import Base
 
+# `data_pipelines.db` (imported above via db.base) already registers public-schema
+# models on Base.metadata as a side effect of its __init__.py; lab isn't imported by
+# anything else on this path, so it's imported explicitly here for the same reason.
+from data_pipelines.lab import models as _lab_models  # noqa: F401
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
@@ -21,15 +26,7 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    """kol_torah by default; pass -x db=lab to target kol_torah_lab instead.
-
-    Both databases share this one migration chain (design.md 7.1: identical layout,
-    distinguished only by connection string), so this is the only place the two
-    diverge.
-    """
-    x_args = context.get_x_argument(as_dictionary=True)
-    lab = x_args.get("db") == "lab"
-    return get_settings().database_url(lab=lab)
+    return get_settings().database_url()
 
 
 def run_migrations_offline() -> None:

@@ -27,7 +27,6 @@ class Settings(BaseSettings):
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_db: str = "kol_torah"
-    lab_db: str = "kol_torah_lab"
 
     s3_bucket_name: str
     aws_region: str = "us-east-1"
@@ -64,12 +63,11 @@ class Settings(BaseSettings):
             file_secret_settings,
         )
 
-    def database_url(self, *, lab: bool = False) -> str:
-        db_name = self.lab_db if lab else self.postgres_db
+    def database_url(self) -> str:
         password = self.postgres_password.get_secret_value()
         return (
             f"postgresql+psycopg://{self.postgres_user}:{password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{db_name}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
 

@@ -217,7 +217,7 @@ op.create_table(
     sa.Column("job_description", sa.Text, nullable=False),
     sa.Column("job_version_notes", sa.Text, nullable=False),
     sa.Column("status", sa.Text, nullable=False),
-    sa.Column("pid", sa.Integer, nullable=False),
+    sa.Column("pid", sa.Integer, nullable=True),
     sa.Column("params", postgresql.JSONB, nullable=False),
     sa.Column("model_id", sa.Text, nullable=False),
     sa.Column("result_json", postgresql.JSONB, nullable=True),
@@ -509,8 +509,9 @@ def is_git_dirty() -> bool: ...        # `git status --porcelain`, non-empty out
 
 Exact layout from AL §6:
 
-- `models.py` — `TranscriptionParams`/`TranscriptSegment`/`TranscriptionResult`,
-  `DiarizationParams`/`DiarizationTurn`/`DiarizationResult`, `JobContext` (AL §4.2),
+- `models.py` — `JobParams` base (`model_id: str`), `TranscriptionParams`/
+  `TranscriptSegment`/`TranscriptionResult`, `DiarizationParams`/`DiarizationTurn`/
+  `DiarizationResult`, `JobContext` (AL §4.2),
   plus `LabJobRow` (added in Phase 1, §2.1).
 - `job.py` — the `LabJob[ParamsT, ResultT]` ABC (AL §4.1).
 - `transcribe.py` — `TranscribeJob`. Model loading + `transformers` pipeline inference
@@ -520,8 +521,10 @@ Exact layout from AL §6:
   `ivrit-ai/pyannote-speaker-diarization-3.1` + `AgglomerativeClustering` (`design.md`
   §3). Same no-framework-imports rule.
 - `job_types.py` — `JOB_TYPES: dict[str, type[LabJob]]` registry (AL §4.1).
-- `jobs.py` — `lab_jobs` CRUD: `create()`, `mark_done()`, `mark_failed()`, `get()`,
-  `list_for_lesson()`, plus the liveness check (`os.kill(pid, 0)`, AL §4.3).
+- `jobs.py` — `lab_jobs` CRUD: `create()` (inserts with `pid=null`, AL §4.3),
+  `set_pid()` (the post-`Popen` write-back), `mark_done()`, `mark_failed()`, `get()`,
+  `list_for_lesson()`, plus the liveness check (`os.kill(pid, 0)`, treating a `null` pid
+  as dead too, AL §4.3).
 - `log_capture.py` — `capture_job_log()` context manager (AL §4.5, exact code already in
   the design doc).
 - `run_job.py` — subprocess entrypoint (`uv run python -m data_pipelines.lab.run_job
@@ -543,11 +546,11 @@ needed beyond what's already in that module.
 
 | Route | Method | Notes |
 | --- | --- | --- |
-| `/api/lab/lessons` | GET | filtered `public.lessons` (rabbi/series/content-type/explicit-id-list query params, AL §2), each row tagged with cache status: `not_stored` (no `audio_files` row, disabled), `stored` (row exists, file not at `local_cache_dir`), `cached` (file present locally) — rendered with `.kt-status`'s glyph-plus-label shell per §0.2, a reasonable extension of the addendum rather than a state it was explicitly designed for |
+| `/api/lab/lessons` | GET | filtered `public.lessons` (rabbi/series/`lesson_type`/explicit-id-list query params — `lesson_type` per `database-schema.md` §4.4, AL §2's own fix from "content type"), each row tagged with cache status: `not_stored` (no `audio_files` row, disabled), `stored` (row exists, file not at `local_cache_dir`), `cached` (file present locally) — rendered with `.kt-status`'s glyph-plus-label shell per §0.2, a reasonable extension of the addendum rather than a state it was explicitly designed for |
 | `/api/lab/lessons/{id}/ensure-cached` | POST | if `stored`, synchronously calls `download_from_bucket` (§4.5) and returns once done — AL §4.6 |
 | `/api/lab/lessons/{id}/jobs` | GET | `lab_jobs` rows for this lesson (run panel's "already running?" check, AL §4.3; also the future compare view's data source) |
-| `/api/lab/jobs` | POST | body: `{lesson_id, job_type, params}`. Validates `params` against `JOB_TYPES[job_type].params_model()`, inserts row (`status="running"`, `git_sha`/`git_dirty` from §4.3, `model_id` pulled out of `params`), `subprocess.Popen([...])`, writes back `pid`, returns the row |
-| `/api/lab/jobs/{id}` | GET | current row. If `status == "running"` and the liveness check (§4.4) finds the pid dead, the backend self-heals: updates the row to `status="failed"`, `error="process appears to have died (pid no longer running)"`, `ended_at=now()`, *then* returns the updated row — so this is detected and recorded once, not recomputed on every poll (AL §4.3's "surfaced... with a manual retry" becomes a real terminal state, not a client-side guess) |
+| `/api/lab/jobs` | POST | body: `{lesson_id, job_type, params}`. Validates `params` against `JOB_TYPES[job_type].params_model()`, inserts row (`status="running"`, `pid=null`, `git_sha`/`git_dirty` from §4.3, `model_id=params.model_id` — the shared `JobParams` base, AL §4.2, is what makes this read generic instead of per-job-type) to get an `id`, then `subprocess.Popen([...,  str(row.id)])`, then writes the real `pid` back onto the row (AL §4.3 — insert has to precede `Popen` since `run_job.py` needs the row's `id` as its argument, so the real pid can't be known at insert time), returns the row |
+| `/api/lab/jobs/{id}` | GET | current row. If `status == "running"` and either the pid is still `null` or the liveness check (§4.4) finds it dead, the backend self-heals: updates the row to `status="failed"`, `error="process appears to have died (pid no longer running)"`, `ended_at=now()`, *then* returns the updated row — so this is detected and recorded once, not recomputed on every poll (AL §4.3's "surfaced... with a manual retry" becomes a real terminal state, not a client-side guess) |
 
 ### 4.7 Frontend
 
@@ -555,8 +558,8 @@ Styling: same primitives and same gap as Phase 2 (§3.3) — `.kt-card` for the 
 table and the run panel, `.kt-btn` for launch/actions, the shared `admin.css` table row
 style for the lesson list. Nothing new to add to that file for this phase.
 
-- `LessonPickerPage` — filter controls (native `<select>`s for rabbi/series/content
-  type; a text input for explicit lesson-id list), table of matching lessons with cache
+- `LessonPickerPage` — filter controls (native `<select>`s for rabbi/series/
+  `lesson_type`; a text input for explicit lesson-id list), table of matching lessons with cache
   status. Selecting a `stored`-but-not-`cached` row triggers `ensure-cached` with a
   loading state (AL §4.6).
 - `JobRunPage` (reached from a lesson row) — run panel: for each job type in the

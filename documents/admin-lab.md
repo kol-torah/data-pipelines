@@ -60,9 +60,9 @@ the existing `public` schema (`rabbis`/`series`/`lessons`/`audio_files`/...). `l
 other constraint. There is no seeding step: the lesson picker (§2) queries
 `public.lessons` directly, live, filtered rather than copied.
 
-**This is a pending change to `design.md` §7.1/§7.3, not yet made there** — `design.md`
-still documents the two-database design as of this writing. Revisit once a real
-production environment exists separate from this dev database; at that point the
+**`design.md` §7.1/§7.3 have already been updated to match this** — this section states
+the reasoning behind that revision, not a change still pending elsewhere. Revisit once a
+real production environment exists separate from this dev database; at that point the
 isolation §7.1 was designed for becomes a real requirement again, and the two-database
 split (or some other boundary) is worth reinstating.
 
@@ -115,8 +115,10 @@ downloading the whole file first. Streamlit's own media serving handled this int
 in the version this replaces; a hand-rolled API needs to do it explicitly.
 
 `design.md` §8.2's other stack decision — Chainlit for the not-yet-started agentic
-search prototype — isn't addressed by this change. Worth revisiting for consistency once
-`design.md` is actually updated, not decided here.
+search prototype — isn't addressed by this change, and `design.md` (already updated to
+reflect React for the lab, per §1.1) leaves it explicitly open there too: whether
+Chainlit is still the right call now that the lab itself is React. Worth revisiting for
+consistency once that prototype work actually starts, not decided here.
 
 ### 1.3 Revises `design.md` G8 — no auth for now
 
@@ -150,8 +152,10 @@ see §4.3. Unaffected by the React/backend split in §1.2: the backend API proce
 ## 2. What this version does
 
 - **Lesson picker.** Queries `public.lessons` directly (§1.1) — no seeding step.
-  Filterable by rabbi, series, content type, or an explicit lesson-id list (`design.md`
-  §8.4's selection axes, applied live rather than copied), with local-cache status shown
+  Filterable by rabbi, series, `lesson_type` (`database-schema.md` §4.4 — the actual
+  column name; `design.md` §8.4 calls this selection axis "content type" in prose, but
+  there is no `content_type` column), or an explicit lesson-id list (`design.md` §8.4's
+  selection axes, applied live rather than copied), with local-cache status shown
   per row. Picking a lesson that's stored but not cached locally downloads it from the
   bucket on the spot (§4.6); a lesson with no `audio_files` row yet (not stored) is shown
   but disabled — there's no audio to run on.
@@ -199,7 +203,7 @@ see §4.3. Unaffected by the React/backend split in §1.2: the backend API proce
 flowchart TD
     REACT["React frontend\n(frontend/)"] -->|"HTTP"| API["Backend API\n(admin_lab_api/)"]
     API -->|"Popen"| RUNNER["run_job.py <job_id>\n(subprocess)"]
-    API -->|"insert, status=running, pid"| JOBS[("lab.lab_jobs")]
+    API -->|"insert, status=running,\npid=null; then update pid"| JOBS[("lab.lab_jobs")]
     RUNNER -->|"reads params, lesson_id"| JOBS
     RUNNER --> DISPATCH{"JOB_TYPES[job_type]"}
     DISPATCH --> TRANSCRIBE["TranscribeJob.run()"]
@@ -289,13 +293,27 @@ difference between job types to dispatch one.
 
 ### 4.2 Params and results: typed, not `dict[str, Any]`
 
-Per `CLAUDE.md`, both are Pydantic models, one pair per job type:
+Per `CLAUDE.md`, both are Pydantic models, one pair per job type. Every job type's
+params model shares one field via a common base, so `lab_jobs.model_id` (§5.1) can be
+populated generically — reading `params.model_id` off whichever `ParamsT` came back from
+validation, with no per-job-type branching to know where the model identifier lives:
 
-- `TranscriptionParams` (model variant, beam size, `initial_prompt`, ...),
+```python
+class JobParams(BaseModel):
+    model_id: str
+```
+
+- `TranscriptionParams(JobParams)` (model variant, beam size, `initial_prompt`, ...),
   `TranscriptSegment` (start/end ms, text), `TranscriptionResult` (segments, model_id,
   params, elapsed_s, device).
-- `DiarizationParams` (clustering settings), `DiarizationTurn` (start/end ms, speaker
-  label), `DiarizationResult` (turns, model_id, params, elapsed_s, device).
+- `DiarizationParams(JobParams)` (clustering settings), `DiarizationTurn` (start/end ms,
+  speaker label), `DiarizationResult` (turns, model_id, params, elapsed_s, device).
+
+`model_id` lives on `DiarizationParams` even though diarization currently has exactly
+one model (`ivrit-ai/pyannote-speaker-diarization-3.1`, pinned, `design.md` §3) — that's
+today's reality, not a constraint the schema should bake in. A future segmentation or
+clustering-model swap becomes a new `DiarizationParams.model_id` value, not a schema
+change to `lab_jobs` or to the generic model-id-extraction logic above.
 
 `initial_prompt` is included in `TranscriptionParams` from the start even though tuning
 it is deferred (`design.md` §9) — the model has to exist anyway, so there's no reason to
@@ -306,10 +324,16 @@ directly, so there's no separate "wire format" to define and keep in sync by han
 
 ### 4.3 Job execution: subprocess, tracked in Postgres
 
-Clicking "run" in the frontend calls the backend API, which does
+Clicking "run" in the frontend calls the backend API, which inserts the `lab_jobs` row
+first (status `running`, `pid` left `null`) to get an `id`, then does
 `subprocess.Popen(["uv", "run", "python", "-m", "data_pipelines.lab.run_job",
-str(job_id)])` after inserting the `lab_jobs` row (status `running`, `pid` from the
-`Popen` result — known immediately, no `queued` phase needed).
+str(job_id)])` — `run_job.py` needs that `id` as its own argument, so the row has to
+exist before the subprocess can be started, which means the real OS pid can't be known
+at insert time. The handler writes `pid` back onto the row immediately after `Popen`
+returns, still within the same request, before responding to the frontend — so a caller
+of `GET /lessons/{id}/jobs` essentially never observes a `running` row with a null
+`pid`; §4.3's liveness check below treats one as dead if it ever does (crash between
+insert and the pid write-back), the same as a pid that's gone stale.
 
 This is what makes a page refresh safe, per `design.md` §8.1's underlying requirement:
 the frontend holds no run state of its own — the run panel's "is something already
@@ -328,10 +352,11 @@ launching a second subprocess.
    `ended_at`, then re-raises (so the subprocess still exits non-zero).
 
 A `running` row whose `pid` is no longer alive (`os.kill(pid, 0)` raising
-`ProcessLookupError`) means the subprocess died without updating its own status — a hard
-kill, not a caught exception (§4.5 covers which failures that includes). The frontend
-surfaces this as "process appears to have died" with a manual retry, rather than
-silently guessing at what happened.
+`ProcessLookupError`) — or whose `pid` is still `null` past the brief insert-then-Popen
+window above — means the subprocess died (or never started) without updating its own
+status — a hard kill, not a caught exception (§4.5 covers which failures that includes).
+The frontend surfaces this as "process appears to have died" with a manual retry, rather
+than silently guessing at what happened.
 
 ### 4.4 Results live in Postgres, not the filesystem
 
@@ -433,7 +458,7 @@ erDiagram
 | `job_description`     | text        | not null                           | frozen copy of `LabJob.description`                             |
 | `job_version_notes`   | text        | not null                           | frozen copy of `LabJob.version_notes`                            |
 | `status`              | text        | not null                           | `"running"` \| `"done"` \| `"failed"`                            |
-| `pid`                 | int         | not null                           | of the `run_job.py` subprocess                                  |
+| `pid`                 | int         | nullable                           | of the `run_job.py` subprocess — `null` only in the brief window between the row's insert and the `Popen` call returning (§4.3) |
 | `params`              | jsonb       | not null                           | the job's typed params (§4.2), serialised                       |
 | `model_id`            | text        | not null                           | duplicated out of `params` for queryability without JSON paths  |
 | `result_json`         | jsonb       | nullable                           | populated on success — see §4.4                                 |

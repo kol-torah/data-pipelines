@@ -397,7 +397,7 @@ Indicative, not final.
 ```
 sources          (id, name, platform, config, rabbi, program)
 lessons          (id, source_id, external_id, url, title, published_at,
-                  content_type, series_id, active_run_id)
+                  lesson_type, series_id, active_run_id)
 audio_files      (id, lesson_id, bucket_uri, content_hash, duration_s, bytes)
 transcripts      (id, lesson_id, model_id, params, created_at, is_active)
 segments         (id, transcript_id, idx, start_ms, end_ms, text)
