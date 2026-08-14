@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 48" width="36" height="48" role="img" aria-label="קול תורה">
+  <path d="M3 46 L3 19 A15 15 0 0 1 33 19 L33 46 Z" fill="#2f5c47"></path>
+  <rect x="9" y="17" width="18" height="2.9" rx="1.45" fill="#ffffff"></rect>
+  <rect x="15" y="24.5" width="12" height="2.9" rx="1.45" fill="#ffffff"></rect>
+  <rect x="9" y="32" width="18" height="2.9" rx="1.45" fill="#e0b64e"></rect>
+  <rect x="13" y="39.5" width="14" height="2.9" rx="1.45" fill="#ffffff"></rect>
+</svg>

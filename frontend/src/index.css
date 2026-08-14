@@ -1,0 +1,8 @@
+/* Hoisted ahead of everything else: base.css imports the same URL further down
+   (kept verbatim there, §0.1), but a bundled build concatenates all of this into one
+   stylesheet, and CSS requires @import to precede any non-@import/@layer rule — an
+   @import buried after Tailwind's own rules gets silently dropped by the browser. */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+Hebrew:wght@400;500;700&family=Heebo:wght@300;400;500;700&family=JetBrains+Mono:wght@400&display=swap');
+@import "tailwindcss";
+@import "./styles/kt/tokens.css";
+@import "./styles/kt/base.css";

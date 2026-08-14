@@ -1,0 +1,24 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Frontend: Vite dev server",
+            "type": "shell",
+            "command": "pnpm --dir frontend dev",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "isBackground": true,
+            "problemMatcher": {
+                "pattern": {
+                    "regexp": "^$"
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "VITE v\\d",
+                    "endsPattern": "ready in \\d+ ms"
+                }
+            }
+        }
+    ]
+}

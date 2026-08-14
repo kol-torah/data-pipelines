@@ -3,6 +3,14 @@
         "8501": {
             "label": "Streamlit admin",
             "onAutoForward": "openBrowser"
+        },
+        "5173": {
+            "label": "Admin/lab frontend (Vite)",
+            "onAutoForward": "openBrowser"
+        },
+        "8000": {
+            "label": "Admin/lab API (FastAPI)",
+            "onAutoForward": "silent"
         }
     }
 }

@@ -1,0 +1,302 @@
+/* Vendored verbatim from ../documentation/design/ui/base.css (admin-lab-plan.md
+   §0.1) — re-syncing after a design update is a manual copy, not automatic. */
+/* ============================================================
+   Kol Torah — Base + component CSS (direction 6b)
+   Reference implementation. Port into the target framework's
+   own styling layer; do not treat class names as contractual.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+Hebrew:wght@400;500;700&family=Heebo:wght@300;400;500;700&family=JetBrains+Mono:wght@400&display=swap');
+
+/* ---- Reset / document ---- */
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--kt-bg);
+  color: var(--kt-text);
+  font-family: var(--kt-font-sans);
+  font-size: var(--kt-size-body);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+html[dir="rtl"] { direction: rtl; }
+* { box-sizing: border-box; }
+
+a { color: var(--kt-green); text-decoration: none; }
+a:hover { color: var(--kt-green-deep); text-decoration: underline; }
+
+h1, h2, h3 { font-family: var(--kt-font-serif); font-weight: 700; color: var(--kt-green-deep); margin: 0; line-height: 1.3; }
+
+/* Timestamps and any digit run must render LTR even inside RTL text. */
+.kt-time { font-family: var(--kt-font-mono); font-size: var(--kt-size-mono); direction: ltr; unicode-bidi: isolate; color: var(--kt-text-faint); }
+
+/* ============ SIGNATURE GRAPHIC 1: ruled ground ============ */
+/* Applied to the main content region only — never the header or cards. */
+.kt-ruled {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 30px,
+    var(--kt-green-tint) 30px,
+    var(--kt-green-tint) var(--kt-rule-height)
+  );
+}
+
+/* ============ SIGNATURE GRAPHIC 2: watermark letter ============ */
+/* One oversized Hebrew letter behind the page title, keyed to the
+   page's topic (see README "Watermark letter" for the mapping rule).
+   Bleeds off the leading edge; never legible, never interactive. */
+.kt-watermark-host { position: relative; overflow: hidden; }
+.kt-watermark {
+  position: absolute;
+  inset-inline-end: -10px;   /* trailing edge (left in RTL) — keeps clear of the right-aligned title */
+  top: -46px;
+  font-family: var(--kt-font-serif);
+  font-size: var(--kt-watermark-size);
+  line-height: 1;
+  color: var(--kt-green-tint);
+  pointer-events: none;
+  user-select: none;
+}
+.kt-watermark-host > *:not(.kt-watermark) { position: relative; }
+/* Title block keeps max-width ~70% on desktop so it never collides with the letter. */
+
+/* ============ Header ============ */
+.kt-header {
+  background: var(--kt-surface);
+  border-bottom: 3px solid var(--kt-green);
+  padding: 15px var(--kt-space-7);
+  display: flex; align-items: center; gap: 20px;
+}
+.kt-wordmark {
+  font-family: var(--kt-font-serif); font-weight: 700;
+  font-size: var(--kt-size-wordmark); color: var(--kt-green); white-space: nowrap;
+}
+
+/* Dual-mode search/ask field — search and the agent are peer modes. */
+.kt-searchbar {
+  flex: 1; display: flex; align-items: center;
+  background: var(--kt-bg); border: 1px solid var(--kt-border);
+  border-radius: var(--kt-radius-md);
+}
+.kt-mode-toggle { display: flex; gap: 2px; padding: var(--kt-space-1); }
+.kt-mode {
+  padding: 5px 12px; border-radius: var(--kt-radius-sm);
+  font-size: var(--kt-size-small); color: var(--kt-text-subtle); cursor: pointer;
+}
+.kt-mode[aria-selected="true"] { background: var(--kt-green); color: #fff; }
+.kt-searchbar input {
+  flex: 1; border: 0; background: transparent; padding: 0 12px;
+  font: inherit; font-size: var(--kt-size-meta); color: var(--kt-text);
+}
+.kt-searchbar input::placeholder { color: var(--kt-text-placeholder); }
+
+.kt-lang {
+  font-size: var(--kt-size-small); color: var(--kt-text-subtle);
+  border: 1px solid var(--kt-border); border-radius: var(--kt-radius-sm); padding: 2px 8px;
+}
+
+/* ============ Logo ============ */
+/* The mark is an SVG asset (logo/mark.svg). Never re-draw it in CSS, never
+   recolour it. In the header it sits before the wordmark at 28px tall. */
+.kt-logo { display: flex; align-items: center; gap: var(--kt-space-4); }
+.kt-logo img, .kt-logo svg { height: 28px; width: auto; display: block; }
+/* Clear space = one ruled-line width; below 20px tall use logo/favicon.svg. */
+
+/* ============ Topic strip ============ */
+.kt-topicstrip {
+  background: var(--kt-surface);
+  border-bottom: 1px solid var(--kt-rule);
+  padding: 9px var(--kt-space-7);
+  display: flex; align-items: center; gap: var(--kt-space-3);
+  font-size: var(--kt-size-small);
+}
+.kt-chip {
+  border: 1px solid var(--kt-chip-border); border-radius: var(--kt-radius-pill);
+  padding: 3px 11px; color: var(--kt-green); background: var(--kt-surface); white-space: nowrap;
+}
+.kt-chip:hover { border-color: var(--kt-green); }
+
+/* ============ Meta / eyebrow ============ */
+.kt-eyebrow {
+  font-family: var(--kt-font-mono); font-size: var(--kt-size-eyebrow);
+  letter-spacing: 0.14em; color: var(--kt-gold-ink); text-transform: none;
+}
+.kt-meta { font-size: var(--kt-size-small); color: var(--kt-text-subtle); }
+
+/* ============ Avatar ============ */
+.kt-avatar {
+  width: 33px; height: 33px; border-radius: 50%;
+  background: var(--kt-gold-avatar); color: var(--kt-gold-ink);
+  font-family: var(--kt-font-serif); font-size: var(--kt-size-meta);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.kt-avatar--lg { width: 64px; height: 64px; font-size: 22px; }
+
+/* ============ Card ============ */
+.kt-card {
+  background: var(--kt-surface); border: 1px solid var(--kt-border);
+  border-radius: var(--kt-radius-lg); padding: 16px var(--kt-space-5);
+}
+
+/* ============ Audio player ============ */
+.kt-player-row { display: flex; align-items: center; gap: 15px; }
+.kt-play {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--kt-green); border: 0; flex-shrink: 0; cursor: pointer;
+}
+.kt-play:hover { background: var(--kt-green-deep); }
+.kt-track {
+  position: relative; height: 6px; background: var(--kt-track);
+  border-radius: 3px; cursor: pointer;
+}
+/* Fill grows from the START edge (right in RTL), adjacent to the play button. */
+.kt-progress {
+  position: absolute; inset-inline-start: 0; top: 0; height: 100%;
+  background: var(--kt-green); border-radius: 3px;
+}
+/* Champagne knob on green progress — the one place gold is a filled shape.
+   Positioned with inset-inline-start = elapsed %, same as the fill width. */
+.kt-knob {
+  position: absolute; top: -5px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--kt-gold); border: 2px solid var(--kt-green);
+}
+/* Chapter boundaries marked on the track, so the map and the audio agree. */
+/* Chapter ticks: inset-inline-start = boundary % of duration. */
+.kt-tick { position: absolute; top: -3px; width: 2px; height: 12px; background: var(--kt-tick); }
+.kt-times { display: flex; justify-content: space-between; margin-top: 8px; }
+.kt-player-controls {
+  display: flex; align-items: center; justify-content: space-between;
+  border-top: 1px solid var(--kt-rule-soft); padding-top: 11px; margin-top: 12px;
+}
+.kt-pill {
+  border: 1px solid var(--kt-border); border-radius: var(--kt-radius-sm);
+  padding: 4px 10px; font-size: var(--kt-size-small); color: var(--kt-text-muted); white-space: nowrap;
+  background: var(--kt-surface); cursor: pointer;
+}
+.kt-nowplaying { font-size: var(--kt-size-small); color: var(--kt-green); font-weight: 600; }
+
+/* ============ Notice (automatic-summary disclosure) ============ */
+/* MANDATORY on every page that shows generated summaries. */
+.kt-notice {
+  font-size: var(--kt-size-notice); color: var(--kt-text-subtle);
+  background: var(--kt-gold-soft); border-radius: var(--kt-radius-md);
+  padding: 9px 12px; line-height: 1.5;
+}
+
+/* ============ Chapter map (list rows) ============ */
+.kt-list { display: flex; flex-direction: column; }
+.kt-row {
+  display: flex; gap: 15px; padding: var(--kt-space-4) 0;
+  border-top: 1px solid var(--kt-rule); cursor: pointer;
+}
+.kt-list > .kt-row:last-child { border-bottom: 1px solid var(--kt-rule); }
+.kt-row-time { width: 50px; padding-top: 2px; }
+.kt-row-title { font-family: var(--kt-font-serif); font-size: var(--kt-size-h3); font-weight: 700; color: var(--kt-green-deep); margin-bottom: var(--kt-space-1); }
+.kt-row-summary { font-size: var(--kt-size-summary); line-height: 1.65; color: var(--kt-text-muted); }
+.kt-row:hover { background: var(--kt-gold-soft); }
+/* Active/playing chapter: champagne wash + green edge bar bleeding to the container edge. */
+.kt-row[aria-current="true"] {
+  background: var(--kt-gold-wash);
+  border-inline-start: 3px solid var(--kt-green);
+  padding-inline-start: var(--kt-space-4);
+  margin-inline-start: calc(-1 * var(--kt-space-4));
+}
+.kt-row[aria-current="true"] .kt-row-time { color: var(--kt-green); font-weight: 700; }
+.kt-row[aria-current="true"] .kt-row-title { color: var(--kt-green-deeper); }
+
+/* ============ Status indicator ============ */
+/* One shell, two glyph families: pipeline pips answer "how far", job glyphs
+   answer "what happened". Sized for a table cell / list row. Deliberately NOT
+   a chip: hundreds of pills per screen is noise. Only `failed` gets weight —
+   it is the one state a person must find by scanning. */
+.kt-status {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--kt-font-sans); font-size: var(--kt-size-small);
+  color: var(--kt-text-muted); white-space: nowrap; line-height: 1;
+}
+.kt-status__glyph { display: inline-flex; align-items: center; flex-shrink: 0; }
+
+/* ---- 1. Pipeline: discovered → downloaded → stored ---- */
+/* Three pips. Passed stages are green, the CURRENT stage is gold, stages not
+   yet reached are the empty track colour — the same "gold = you are here"
+   metaphor as the player playhead and the active chapter row. Position in the
+   sequence is legible without reading the label, and in one colour. */
+.kt-pips { display: inline-flex; gap: 3px; }
+.kt-pip {
+  width: var(--kt-pip-w); height: var(--kt-pip-h); border-radius: 1.5px;
+  background: var(--kt-track);
+}
+.kt-pip.is-done    { background: var(--kt-green); }
+.kt-pip.is-current { background: var(--kt-gold); }
+/* Terminal stage reached: label joins the green ink. */
+.kt-status--stored { color: var(--kt-green); font-weight: 600; }
+
+/* ---- 2. Job run: running / done / failed ---- */
+/* running — a gold arc turning on a green-tinted ring: in-progress, not a result. */
+.kt-status--running .kt-status__glyph::before {
+  content: ""; width: 11px; height: 11px; border-radius: 50%;
+  border: 2px solid var(--kt-track); border-top-color: var(--kt-gold);
+  animation: kt-spin 0.9s linear infinite;
+}
+@keyframes kt-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .kt-status--running .kt-status__glyph::before { animation: none; }
+}
+/* done — a filled green disc. Quiet on purpose: success is the common case. */
+.kt-status--done .kt-status__glyph::before {
+  content: ""; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--kt-green);
+}
+.kt-status--done { color: var(--kt-green); }
+/* failed — encoded FOUR ways so it never depends on colour alone:
+   rubric hue + SQUARE glyph (shape differs from every other state) +
+   the only tinted wash in the set + 600 weight. */
+.kt-status--failed {
+  color: var(--kt-rubric); font-weight: 600;
+  background: var(--kt-rubric-wash); border: 1px solid var(--kt-rubric-border);
+  border-radius: var(--kt-radius-sm); padding: 3px 8px; margin: -3px 0;
+}
+.kt-status--failed .kt-status__glyph::before {
+  content: ""; width: 9px; height: 9px; border-radius: 1px;
+  background: var(--kt-rubric);
+}
+
+/* ============ Buttons ============ */
+.kt-btn {
+  font: inherit; font-size: var(--kt-size-meta); font-weight: 500;
+  padding: 9px 20px; border-radius: var(--kt-radius-sm); cursor: pointer;
+  background: var(--kt-green); color: #fff; border: 1px solid var(--kt-green);
+}
+.kt-btn:hover { background: var(--kt-green-deep); }
+.kt-btn--secondary { background: var(--kt-surface); color: var(--kt-green); }
+.kt-btn--secondary:hover { background: var(--kt-gold-soft); }
+
+:focus-visible { outline: 2px solid var(--kt-green); outline-offset: 2px; }
+
+/* ============ Layout shell ============ */
+.kt-page { max-width: 1100px; margin: 0 auto; background: var(--kt-bg); }
+.kt-main { padding: 28px var(--kt-space-7) var(--kt-space-7); }
+.kt-split { display: flex; }
+.kt-split > .kt-content { flex: 1; padding: var(--kt-space-7); border-inline-end: 1px solid var(--kt-rule); }
+.kt-split > .kt-side { width: 262px; padding: var(--kt-space-7) var(--kt-space-6); background: var(--kt-surface-sunken); display: flex; flex-direction: column; gap: var(--kt-space-7); }
+
+/* ============ Responsive ============ */
+@media (max-width: 860px) {
+  .kt-split { flex-direction: column; }
+  .kt-split > .kt-content { border-inline-end: 0; border-bottom: 1px solid var(--kt-rule); }
+  .kt-split > .kt-side { width: auto; }
+  .kt-header { flex-wrap: wrap; gap: var(--kt-space-3); }
+  .kt-searchbar { order: 3; flex-basis: 100%; }
+  :root { --kt-size-title: 24px; --kt-size-h2: 18px; --kt-watermark-size: 170px; }
+  .kt-main { padding: 20px var(--kt-space-5); }
+  /* Sticky mini-player docked to the bottom on mobile. */
+  .kt-miniplayer {
+    position: sticky; bottom: 0; background: var(--kt-surface);
+    border-top: 1px solid var(--kt-border); padding: 12px var(--kt-space-5);
+    display: flex; align-items: center; gap: var(--kt-space-4);
+  }
+  /* Every tap target at least 44px. */
+  .kt-play, .kt-pill, .kt-chip, .kt-mode { min-height: 44px; display: flex; align-items: center; }
+}
+@media print { .kt-ruled, .kt-watermark { display: none; } }

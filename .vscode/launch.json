@@ -15,6 +15,27 @@
             "justMyCode": true
         },
         {
+            "name": "Frontend: Debug in Chrome",
+            "type": "chrome",
+            "request": "launch",
+            "url": "http://localhost:5173",
+            "webRoot": "${workspaceFolder}/frontend",
+            "preLaunchTask": "Frontend: Vite dev server"
+        },
+        {
+            "name": "Python: Admin/lab API",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "uvicorn",
+            "args": [
+                "data_pipelines.admin_lab_api.main:app",
+                "--port",
+                "8000"
+            ],
+            "cwd": "${workspaceFolder}",
+            "justMyCode": true
+        },
+        {
             "name": "Python: Discover Pipeline",
             "type": "debugpy",
             "request": "launch",

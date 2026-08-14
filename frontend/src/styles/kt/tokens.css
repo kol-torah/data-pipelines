@@ -1,0 +1,90 @@
+/* Vendored verbatim from ../documentation/design/ui/tokens.css (admin-lab-plan.md
+   §0.1) — re-syncing after a design update is a manual copy, not automatic. */
+/* ============================================================
+   Kol Torah — Design Tokens
+   Direction 6b: "Green ink, champagne, ruled ground"
+   Locked 2026-08. Hebrew-first (RTL), English secondary.
+   ============================================================ */
+
+:root {
+  /* ---- Brand / structural ---- */
+  --kt-green:            oklch(0.36 0.06 148);   /* #2f5c47  primary ink: headings, rules, wordmark, filled buttons */
+  --kt-green-deep:       oklch(0.30 0.05 148);   /* #27503c  large display headings */
+  --kt-green-deeper:     oklch(0.28 0.05 148);   /* #23492f-ish  active chapter heading */
+  --kt-green-tint:       oklch(0.36 0.06 148 / 0.07); /* watermark letter + ruled ground line */
+
+  /* ---- Gold / champagne (accent only — never a large fill) ---- */
+  --kt-gold:             oklch(0.80 0.075 92);   /* playhead knob, thin accent rules */
+  --kt-gold-wash:        oklch(0.945 0.055 96);  /* active chapter row background */
+  --kt-gold-soft:        oklch(0.955 0.030 96);  /* disclosure / notice background */
+  --kt-gold-avatar:      oklch(0.92 0.045 92);   /* avatar-initials background */
+  --kt-gold-ink:         oklch(0.42 0.05 100);   /* text on gold-avatar */
+
+  /* ---- Ground / surfaces ---- */
+  --kt-bg:               oklch(0.975 0.008 100); /* page ground (warm off-white) */
+  --kt-surface:          #ffffff;                /* header, cards, player, chips */
+  --kt-surface-sunken:   oklch(0.955 0.014 105); /* sidebar / secondary panel */
+
+  /* ---- Text ---- */
+  --kt-text:             oklch(0.25 0.03 150);   /* body */
+  --kt-text-muted:       oklch(0.40 0.02 150);   /* summaries, secondary body */
+  --kt-text-subtle:      oklch(0.47 0.02 150);   /* meta lines (series, duration) */
+  --kt-text-faint:       oklch(0.52 0.02 150);   /* least important meta */
+  --kt-text-placeholder: oklch(0.62 0.015 150);  /* input placeholder */
+
+  /* ---- Lines ---- */
+  --kt-border:           oklch(0.87 0.010 100);  /* card / input borders */
+  --kt-rule:             oklch(0.90 0.010 100);  /* list-row separators */
+  --kt-rule-soft:        oklch(0.93 0.010 100);  /* inside-card separators */
+  --kt-chip-border:      oklch(0.85 0.015 130);
+  --kt-track:            oklch(0.92 0.010 100);  /* progress track */
+  --kt-tick:             oklch(0.79 0.010 100);  /* chapter ticks on the track */
+
+  /* ---- Type ---- */
+  --kt-font-serif: 'Noto Serif Hebrew', serif;   /* titles, headings, wordmark, sources */
+  --kt-font-sans:  'Heebo', sans-serif;          /* body, UI, chrome */
+  --kt-font-mono:  'JetBrains Mono', monospace;  /* timestamps, eyebrow labels — LTR digits */
+
+  /* ---- Type scale (px; RTL Hebrew, no size below 12) ---- */
+  --kt-size-wordmark: 25px;
+  --kt-size-title:    30px;  /* lesson title, serif 700, line-height 1.3 */
+  --kt-size-h2:       20px;  /* section heading, serif 700 */
+  --kt-size-h3:       17px;  /* list-item heading, serif 700 */
+  --kt-size-body:     15px;
+  --kt-size-summary:  14.5px;/* line-height 1.65 */
+  --kt-size-meta:     14px;
+  --kt-size-small:    13px;
+  --kt-size-mono:     12px;
+  --kt-size-notice:   12.5px;
+  --kt-size-eyebrow:  11px;  /* mono, letter-spacing .14em */
+
+  /* ---- Spacing (4px base) ---- */
+  --kt-space-1: 4px;  --kt-space-2: 7px;  --kt-space-3: 10px; --kt-space-4: 14px;
+  --kt-space-5: 18px; --kt-space-6: 22px; --kt-space-7: 26px; --kt-space-8: 32px;
+
+  /* ---- Radii — small and restrained; nothing pill-shaped except chips ---- */
+  --kt-radius-sm: 3px;   /* buttons, toggle segments */
+  --kt-radius-md: 4px;   /* inputs, notice blocks */
+  --kt-radius-lg: 6px;   /* cards, page container */
+  --kt-radius-pill: 99px;/* topic chips, question chips only */
+
+  /* ---- Elevation — one shadow, used sparingly ---- */
+  --kt-shadow: 0 24px 60px -30px rgba(45, 60, 45, 0.40);
+
+  /* ---- Status (admin/lab tool) ---- */
+  /* Rubric red — the scribe's red ink. The ONE colour licensed outside green/gold,
+     and only for the `failed` state. Never for warnings, links, or emphasis. */
+  --kt-rubric:        oklch(0.47 0.15 30);    /* #a63c28  glyph + label on failure */
+  --kt-rubric-wash:   oklch(0.955 0.030 35);  /* the only tinted status background */
+  --kt-rubric-border: oklch(0.86 0.050 33);
+  --kt-pip-w: 3px;    /* pipeline pip — same proportions as the player's chapter ticks */
+  --kt-pip-h: 9px;
+
+  /* ---- Logo ---- */
+  --kt-logo-green: #2f5c47;   /* == --kt-green, hard-coded inside the SVG assets */
+  --kt-logo-gold:  #e0b64e;   /* == --kt-gold family, the single gold rule in the mark */
+
+  /* ---- Signature graphics ---- */
+  --kt-rule-height: 31px;  /* ruled-ground line pitch: 30px gap + 1px line */
+  --kt-watermark-size: 250px;
+}
