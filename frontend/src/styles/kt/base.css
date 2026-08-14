@@ -1,12 +1,16 @@
-/* Vendored verbatim from ../documentation/design/ui/base.css (admin-lab-plan.md
-   §0.1) — re-syncing after a design update is a manual copy, not automatic. */
-/* ============================================================
+/* Vendored from ../documentation/design/ui/base.css (admin-lab-plan.md §0.1) —
+   re-syncing after a design update is a manual copy, not automatic. One deliberate
+   deviation from verbatim: the Google Fonts @import below is removed here and moved
+   to the top of index.css instead (still the same URL). CSS requires @import to be
+   the first rule in a stylesheet; once this file is concatenated after "tailwindcss"
+   and tokens.css it no longer is, and the browser (and Vite's dev/build CSS
+   pipeline) drops or flags it. Re-check this note on re-sync in case a future
+   version of base.css handles fonts differently.
+   ============================================================
    Kol Torah — Base + component CSS (direction 6b)
    Reference implementation. Port into the target framework's
    own styling layer; do not treat class names as contractual.
    ============================================================ */
-
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+Hebrew:wght@400;500;700&family=Heebo:wght@300;400;500;700&family=JetBrains+Mono:wght@400&display=swap');
 
 /* ---- Reset / document ---- */
 html { -webkit-text-size-adjust: 100%; }
