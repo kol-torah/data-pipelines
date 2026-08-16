@@ -326,7 +326,7 @@ directly, so there's no separate "wire format" to define and keep in sync by han
 
 Clicking "run" in the frontend calls the backend API, which inserts the `lab_jobs` row
 first (status `running`, `pid` left `null`) to get an `id`, then does
-`subprocess.Popen(["uv", "run", "python", "-m", "data_pipelines.lab.run_job",
+`subprocess.Popen([sys.executable, "-m", "data_pipelines.lab.run_job",
 str(job_id)])` — `run_job.py` needs that `id` as its own argument, so the row has to
 exist before the subprocess can be started, which means the real OS pid can't be known
 at insert time. The handler writes `pid` back onto the row immediately after `Popen`
@@ -334,6 +334,27 @@ returns, still within the same request, before responding to the frontend — so
 of `GET /lessons/{id}/jobs` essentially never observes a `running` row with a null
 `pid`; §4.3's liveness check below treats one as dead if it ever does (crash between
 insert and the pid write-back), the same as a pid that's gone stale.
+
+**`sys.executable`, not `["uv", "run", "python", ...]`, confirmed during implementation.**
+The API process is itself already started via `uv run uvicorn ...`, so `sys.executable`
+already points at the right venv interpreter — no need to re-resolve the environment
+per job launch. This isn't just simpler: going through `uv run` actually breaks the
+liveness check below, because `uv run` forks a child python process rather than
+exec-replacing itself, so the pid `Popen` returns would be the `uv` wrapper's, not the
+worker's — `os.kill(pid, 0)` would then report the wrapper as alive/dead independently
+of whatever the actual worker process is doing. `sys.executable` makes the tracked pid
+the real worker, which is what the liveness check needs to mean anything.
+
+**The liveness check also has to reap, not just probe.** This API process is the direct
+parent of every job subprocess it launches, so a subprocess that has died is a *zombie*
+until something calls `wait()` on it — and `os.kill(pid, 0)` reports a zombie as
+"alive" the same as a running process, since it still holds a pid. The liveness check
+(`data_pipelines.lab.jobs.is_alive`) calls `os.waitpid(pid, os.WNOHANG)` first — which
+both reaps a finished child (so zombies don't accumulate for the server's lifetime) and
+is how a just-died child is actually detected — before falling back to the plain
+`os.kill(pid, 0)` existence check for pids that were never this process's child (e.g.
+stale ones from a previous server run). Confirmed against a real `kill -9` mid-run:
+without the `waitpid` reap, the killed job stayed reported as `running` indefinitely.
 
 This is what makes a page refresh safe, per `design.md` §8.1's underlying requirement:
 the frontend holds no run state of its own — the run panel's "is something already

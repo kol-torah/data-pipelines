@@ -1,4 +1,5 @@
 import type { components } from './schema'
+import { apiFetch } from './client'
 
 export type Rabbi = components['schemas']['RabbiRead']
 export type RabbiWrite = components['schemas']['RabbiWrite']
@@ -8,23 +9,6 @@ export type Lesson = components['schemas']['LessonRead']
 export type LessonStatus = components['schemas']['LessonStatus']
 export type ResetPreview = components['schemas']['ResetPreview']
 export type ResetResult = components['schemas']['ResetResult']
-
-class ApiError extends Error {}
-
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
-    headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
-    ...init,
-  })
-  if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { detail?: string } | null
-    throw new ApiError(body?.detail ?? `${init?.method ?? 'GET'} ${path} failed: ${res.status}`)
-  }
-  if (res.status === 204) {
-    return undefined as T
-  }
-  return res.json() as Promise<T>
-}
 
 export const listRabbis = () => apiFetch<Rabbi[]>('/api/rabbis')
 export const createRabbi = (body: RabbiWrite) =>

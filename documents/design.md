@@ -207,6 +207,25 @@ turns out to be wrong in practice.
 transcript segment by timestamp overlap) is deferred to the main pipeline implementation
 — it wasn't built as part of this lab experimentation.
 
+**Implementation note (pyannote.audio 4.x): feed it a preloaded waveform, not a file
+path.** The pinned pipeline decodes file paths via `torchcodec`, whose probed container
+duration can disagree by a few hundred samples with what actually decodes for lossy
+formats — reproduced on both this project's `.mp3` and `.opus` cached audio, not a
+one-off. `pyannote.audio`'s own `crop()` then raises on the mismatch, which in practice
+meant every real diarization run failed. The library's own documented workaround —
+loading the file once via `soundfile` into an in-memory `{"waveform": tensor,
+"sample_rate": int}` and passing that to the pipeline instead of a path — avoids the
+probe-vs-decode disagreement entirely and is what `lab/diarize.py` does. Also note for
+future readers: the non-legacy `SpeakerDiarization` pipeline (the current default)
+returns a `DiarizeOutput` dataclass (`.speaker_diarization`, `.exclusive_speaker_
+diarization`, `.speaker_embeddings`), not the bare `Annotation` older examples assume —
+`.speaker_diarization` is the `Annotation` with `.itertracks()`.
+
+Both findings were confirmed end to end on this machine: a 58-minute real Q&A lesson
+diarized in 160s (~22x real-time, matching the estimate above) and produced 7 speaker
+labels with one label overwhelmingly dominant (2314s vs. the next-highest at 95s) — the
+same single-dominant-host pattern the original hand-test found.
+
 ---
 
 ## 4. LLM access

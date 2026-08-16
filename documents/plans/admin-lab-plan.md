@@ -561,7 +561,14 @@ style for the lesson list. Nothing new to add to that file for this phase.
 - `LessonPickerPage` — filter controls (native `<select>`s for rabbi/series/
   `lesson_type`; a text input for explicit lesson-id list), table of matching lessons with cache
   status. Selecting a `stored`-but-not-`cached` row triggers `ensure-cached` with a
-  loading state (AL §4.6).
+  loading state (AL §4.6). **The lessons query only runs once at least one filter is
+  set** — confirmed at implementation time against real data (2185+ lessons already in
+  the catalogue) that an unfiltered query renders a multi-thousand-row unvirtualized
+  list, which is a real usability problem independent of list virtualization (that's
+  only in scope for Phase 4's transcript/diarization lists, §4.8/§5.2, and wouldn't fix
+  an admin picker showing thousands of rows by default anyway). With no filter set, the
+  page shows a prompt ("select a rabbi, series, lesson type, or id list") instead of an
+  empty or huge table.
 - `JobRunPage` (reached from a lesson row) — run panel: for each job type in the
   registry (transcribe, diarize), either a "launch" form (params, defaulted from the
   job's `params_model()`) or, if `/lessons/{id}/jobs` shows one already `running`, its

@@ -41,6 +41,10 @@ class Settings(BaseSettings):
 
     youtube_api_key: SecretStr
 
+    # Required for diarization — pyannote.audio 4.x unconditionally loads a gated
+    # component at pipeline init regardless of clustering method (design.md §3).
+    hf_token: SecretStr
+
     @field_validator("local_cache_dir")
     @classmethod
     def _resolve_local_cache_dir(cls, value: Path) -> Path:

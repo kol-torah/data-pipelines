@@ -20,6 +20,9 @@ export function Header() {
         <NavLink to="/series" className={({ isActive }) => (isActive ? 'is-active' : undefined)}>
           סדרות
         </NavLink>
+        <NavLink to="/lab" className={({ isActive }) => (isActive ? 'is-active' : undefined)}>
+          מעבדה
+        </NavLink>
       </nav>
     </header>
   )

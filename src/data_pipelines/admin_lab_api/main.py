@@ -9,9 +9,13 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from data_pipelines.admin_lab_api.routers.catalogue import router as catalogue_router
+from data_pipelines.admin_lab_api.routers.jobs import router as jobs_router
+from data_pipelines.admin_lab_api.routers.lessons import router as lessons_router
 
 app = FastAPI(title="Kol Torah — admin/lab API")
 app.include_router(catalogue_router)
+app.include_router(lessons_router)
+app.include_router(jobs_router)
 
 
 class HealthResponse(BaseModel):

@@ -135,6 +135,15 @@ def list_existing_audio(
     return found
 
 
+def download_from_bucket(storage_key: str, dest_path: Path) -> None:
+    """The missing counterpart to upload_to_bucket, for the lab's auto-download of
+    stored-but-not-cached lessons (admin-lab.md §4.6)."""
+    settings = get_settings()
+    client = _client()
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    client.download_file(settings.s3_bucket_name, storage_key, str(dest_path))
+
+
 def upload_to_bucket(
     local_path: Path, storage_key: str, *, content_hash: str, duration_s: float
 ) -> str:

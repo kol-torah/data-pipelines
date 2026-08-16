@@ -112,6 +112,99 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lab/lessons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Lab Lessons
+         * @description AL §2's selection axes: rabbi/series/lesson_type, or an explicit id list —
+         *     applied live against public.lessons (AL §1.1), no seeding step.
+         */
+        get: operations["list_lab_lessons_api_lab_lessons_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/lessons/{lesson_id}/ensure-cached": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ensure Cached
+         * @description Synchronous — a single file download is short enough that blocking on it
+         *     isn't worth run_job.py's tracking machinery (AL §4.6).
+         */
+        post: operations["ensure_cached_api_lab_lessons__lesson_id__ensure_cached_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/lessons/{lesson_id}/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Lesson Jobs */
+        get: operations["list_lesson_jobs_api_lab_lessons__lesson_id__jobs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Job */
+        post: operations["create_job_api_lab_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Job */
+        get: operations["get_job_api_lab_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -133,6 +226,13 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * CacheStatus
+         * @description Not the same enumeration as db.status.LessonStatus (admin-lab-plan.md §0.2) —
+         *     this is about local file presence, not catalogue pipeline progress.
+         * @enum {string}
+         */
+        CacheStatus: "not_stored" | "stored" | "cached";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -142,6 +242,91 @@ export interface components {
         HealthResponse: {
             /** Status */
             status: string;
+        };
+        /** JobCreate */
+        JobCreate: {
+            /** Lesson Id */
+            lesson_id: number;
+            /** Job Type */
+            job_type: string;
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * LabJobRead
+         * @description Maps 1:1 onto LabJobRow's columns, so from_attributes is enough here
+         *     (contrast schemas/catalogue.py's Read models, which need joined/computed
+         *     fields).
+         */
+        LabJobRead: {
+            /** Id */
+            id: number;
+            /** Lesson Id */
+            lesson_id: number;
+            /** Job Type */
+            job_type: string;
+            /** Job Version */
+            job_version: string;
+            /** Job Description */
+            job_description: string;
+            /** Job Version Notes */
+            job_version_notes: string;
+            /** Status */
+            status: string;
+            /** Pid */
+            pid: number | null;
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+            /** Model Id */
+            model_id: string;
+            /** Result Json */
+            result_json: {
+                [key: string]: unknown;
+            } | null;
+            /** Log */
+            log: string | null;
+            /** Error */
+            error: string | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Ended At */
+            ended_at: string | null;
+            /** Git Sha */
+            git_sha: string;
+            /** Git Dirty */
+            git_dirty: boolean;
+        };
+        /**
+         * LabLessonRead
+         * @description Built explicitly (not from_attributes) — series_name_en/rabbi_name_en are
+         *     joined, and cache_status is computed against local_cache_dir, neither a Lesson
+         *     attribute.
+         */
+        LabLessonRead: {
+            /** Id */
+            id: number;
+            /** Series Id */
+            series_id: number;
+            /** Series Name En */
+            series_name_en: string;
+            /** Rabbi Name En */
+            rabbi_name_en: string;
+            /** Title He */
+            title_he: string;
+            /** Title En */
+            title_en: string | null;
+            /** Lesson Type */
+            lesson_type: string;
+            /** Recorded At */
+            recorded_at: string | null;
+            cache_status: components["schemas"]["CacheStatus"];
         };
         /**
          * LessonRead
@@ -641,6 +826,166 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResetResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_lab_lessons_api_lab_lessons_get: {
+        parameters: {
+            query?: {
+                rabbi_id?: number | null;
+                series_id?: number | null;
+                lesson_type?: string | null;
+                lesson_ids?: number[] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabLessonRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ensure_cached_api_lab_lessons__lesson_id__ensure_cached_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lesson_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabLessonRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_lesson_jobs_api_lab_lessons__lesson_id__jobs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lesson_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabJobRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_job_api_lab_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabJobRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_job_api_lab_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabJobRead"];
                 };
             };
             /** @description Validation Error */
