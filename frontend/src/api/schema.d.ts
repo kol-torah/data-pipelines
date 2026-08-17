@@ -133,6 +133,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lab/recent-lessons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Recent Lessons
+         * @description Lessons with the most recently started lab_jobs — lets an operator get back
+         *     to a lesson they just ran a job on without re-filtering the full picker.
+         */
+        get: operations["list_recent_lessons_api_lab_recent_lessons_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lab/lessons/{lesson_id}/ensure-cached": {
         parameters: {
             query?: never;
@@ -299,7 +320,7 @@ export interface components {
                 [key: string]: unknown;
             };
             /** Model Id */
-            model_id: string;
+            model_id: string | null;
             /** Result Json */
             result_json: {
                 [key: string]: unknown;
@@ -869,6 +890,37 @@ export interface operations {
                 series_id?: number | null;
                 lesson_type?: string | null;
                 lesson_ids?: number[] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabLessonRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_recent_lessons_api_lab_recent_lessons_get: {
+        parameters: {
+            query?: {
+                limit?: number;
             };
             header?: never;
             path?: never;

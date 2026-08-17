@@ -67,6 +67,48 @@
 }
 .kt-error { color: var(--kt-rubric); font-size: var(--kt-size-small); }
 
+/* ============ Merged transcript rows (merge-and-search-plan.md §3.2) ============ */
+/* Binary speaker accent: green = host (the system's primary ink), gold = anyone
+   else (its secondary/"you are here" role). Identity is carried by the chip's
+   text, not by a colour per speaker — the palette has two inks and --kt-rubric
+   is licensed for `failed` alone. Deliberately a thin inline-start border, not
+   .kt-row[aria-current]'s wash + edge bar: a row can be "host" and "playing
+   now" at once, so the two treatments have to stay distinguishable. */
+.kt-row--host { border-inline-start: 3px solid var(--kt-green); }
+.kt-row--other { border-inline-start: 3px solid var(--kt-gold); }
+.kt-row--host, .kt-row--other { padding-inline-start: var(--kt-space-3); }
+
+/* Chip + raw pyannote label, shown only on the row where the speaker changes. */
+.kt-speaker-head {
+  display: inline-flex; align-items: center; gap: var(--kt-space-2);
+  margin-inline-end: var(--kt-space-2);
+}
+.kt-speaker-raw { font-size: var(--kt-size-small); color: var(--kt-text-subtle); }
+
+/* ============ Transcript search (merge-and-search-plan.md §4.3) ============ */
+.kt-search {
+  display: flex; align-items: center; gap: var(--kt-space-2);
+  margin-bottom: var(--kt-space-3);
+}
+.kt-search input {
+  flex: 1 1 auto; min-width: 0;
+  border: 1px solid var(--kt-border); border-radius: var(--kt-radius-md);
+  padding: var(--kt-space-2) var(--kt-space-3); background: var(--kt-surface); color: var(--kt-text);
+}
+.kt-search input:focus { outline: 2px solid var(--kt-gold); outline-offset: 1px; }
+.kt-search .kt-btn { padding-inline: var(--kt-space-3); }
+.kt-search .kt-btn:disabled { opacity: 0.45; cursor: default; }
+.kt-search-count { flex: 0 0 auto; white-space: nowrap; }
+
+/* A match and the playing row can be the same row, so the current match is
+   marked by weight + a gold rule rather than by background alone — .kt-gold-wash
+   is already the active row's own background. */
+.kt-hit { background: var(--kt-gold-wash); border-radius: 2px; }
+.kt-hit--current {
+  background: var(--kt-gold-avatar); font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--kt-gold-ink);
+}
+
 /* ============ Nav ============ */
 .kt-admin-nav { display: flex; gap: var(--kt-space-4); }
 .kt-admin-nav a { color: var(--kt-text-subtle); font-weight: 500; }

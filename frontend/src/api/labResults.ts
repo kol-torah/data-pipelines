@@ -29,3 +29,29 @@ export interface DiarizationResult {
   elapsed_s: number
   device: string
 }
+
+// Mirrors lab/models.py's merge models. `speaker` is the raw pyannote label;
+// `speakers` maps it to a role, and the Hebrew strings ("מנחה" / "שואל N") are
+// rendered here rather than stored, so merge.py stays reusable by a non-UI
+// pipeline stage (merge-and-search-plan.md §2.3).
+export interface MergedSegment {
+  start_ms: number
+  end_ms: number
+  text: string
+  speaker: string | null
+}
+
+export interface SpeakerSummary {
+  label: string
+  role: 'host' | 'other'
+  index: number | null
+  total_ms: number
+  first_start_ms: number
+}
+
+export interface MergeResult {
+  segments: MergedSegment[]
+  speakers: SpeakerSummary[]
+  source_job_ids: Record<string, number>
+  elapsed_s: number
+}

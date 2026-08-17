@@ -4,6 +4,7 @@ Run with: uv run python -m data_pipelines.lab.run_job <job_id>
 """
 
 import sys
+from typing import Any
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -24,16 +25,34 @@ def main() -> None:
         if row is None:
             raise SystemExit(f"no lab_jobs row with id {job_id}")
 
-        lesson = db.get(Lesson, row.lesson_id)
-        if lesson is None or lesson.audio_file is None:
-            raise SystemExit(f"lesson {row.lesson_id} has no stored audio to run on")
-        audio_path = get_settings().local_cache_dir / lesson.audio_file.storage_key
-        if not audio_path.exists():
-            raise SystemExit(f"{audio_path} not found locally — ensure-cached wasn't called before launch?")
-
         job_cls = JOB_TYPES[row.job_type]
         params = job_cls.params_model().model_validate(row.params)
-        ctx = JobContext(lesson_id=row.lesson_id, audio_path=audio_path, params=params)
+
+        audio_path = None
+        if job_cls.needs_audio:
+            lesson = db.get(Lesson, row.lesson_id)
+            if lesson is None or lesson.audio_file is None:
+                raise SystemExit(f"lesson {row.lesson_id} has no stored audio to run on")
+            audio_path = get_settings().local_cache_dir / lesson.audio_file.storage_key
+            if not audio_path.exists():
+                raise SystemExit(f"{audio_path} not found locally — ensure-cached wasn't called before launch?")
+
+        # Jobs that consume prior results rather than audio (AL §5.3) declare them
+        # via params.source_job_ids(); resolved here so the job itself never sees a
+        # Session. The launch endpoint validates the same thing up front for a
+        # friendlier error — this re-check is for launches that didn't go through it.
+        source_results: dict[str, dict[str, Any]] = {}
+        for name, source_id in params.source_job_ids().items():
+            source = get(db, source_id)
+            if source is None or source.lesson_id != row.lesson_id:
+                raise SystemExit(f"{name}: no lab_jobs row {source_id} for lesson {row.lesson_id}")
+            if source.status != "done" or source.result_json is None:
+                raise SystemExit(f"{name}: job {source_id} is {source.status}, not done")
+            source_results[name] = source.result_json
+
+        ctx = JobContext(
+            lesson_id=row.lesson_id, audio_path=audio_path, params=params, source_results=source_results
+        )
 
         with capture_job_log() as log:
             try:

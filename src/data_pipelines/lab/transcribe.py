@@ -70,9 +70,10 @@ class TranscribeJob(LabJob[TranscriptionParams, TranscriptionResult]):
                 params.initial_prompt, return_tensors="pt"
             ).to(device)
 
-        print(f"transcribing {ctx.audio_path}")
+        audio_path = ctx.require_audio()
+        print(f"transcribing {audio_path}")
         start = time.monotonic()
-        output = asr(str(ctx.audio_path), return_timestamps=True, generate_kwargs=generate_kwargs)
+        output = asr(str(audio_path), return_timestamps=True, generate_kwargs=generate_kwargs)
         elapsed_s = time.monotonic() - start
         print(f"transcribed in {elapsed_s:.1f}s")
 

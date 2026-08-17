@@ -34,6 +34,19 @@ def create_job(body: JobCreate, db: DbSession) -> LabJobRead:
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    # Jobs that consume prior results (the merge job, AL §5.3) name them via
+    # params.source_job_ids() — checked here so a bad reference is a synchronous
+    # 422 rather than a subprocess that fails a second later. Generic: no branch
+    # on job_type, and a job type with no sources skips the loop entirely.
+    for name, source_id in params.source_job_ids().items():
+        source = lab_jobs.get(db, source_id)
+        if source is None or source.lesson_id != body.lesson_id:
+            raise HTTPException(
+                status_code=422, detail=f"{name}: no job {source_id} for lesson {body.lesson_id}"
+            )
+        if source.status != "done":
+            raise HTTPException(status_code=422, detail=f"{name}: job {source_id} is {source.status}, not done")
+
     # Insert first to get an id, then Popen (run_job.py needs the id as its own
     # argument), then write the real pid back — AL §4.3. Between insert and the
     # pid write-back below, list_lesson_jobs would see pid=null; jobs.is_alive()
@@ -47,7 +60,7 @@ def create_job(body: JobCreate, db: DbSession) -> LabJobRead:
         job_description=job_cls.description,
         job_version_notes=job_cls.version_notes,
         params=params.model_dump(mode="json"),
-        model_id=params.model_id,
+        model_id=params.row_model_id(),
     )
     # sys.executable, not "uv run python": this API process is itself already
     # running inside the right venv (started via `uv run uvicorn ...`), and

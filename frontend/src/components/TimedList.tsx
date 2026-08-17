@@ -17,12 +17,18 @@ export function TimedList<T extends TimedItem>({
   items,
   renderRow,
   emptyLabel,
+  rowClassName,
+  focusIndex,
 }: {
   items: T[]
-  renderRow: (item: T) => ReactNode
+  renderRow: (item: T, index: number) => ReactNode
   emptyLabel: string
+  // Extra class per row — the merged list's speaker accent (LessonResults).
+  rowClassName?: (item: T, index: number) => string | undefined
+  // Scroll this row into view when it changes — search jumps (§4.3).
+  focusIndex?: number
 }) {
-  const { currentMs, seek } = usePlayback()
+  const { currentMs, seek, isPlaying } = usePlayback()
   const parentRef = useRef<HTMLDivElement>(null)
 
   const activeIndex = items.findIndex((item) => currentMs >= item.start_ms && currentMs < item.end_ms)
@@ -34,12 +40,25 @@ export function TimedList<T extends TimedItem>({
     overscan: 8,
   })
 
+  // Only follow the playhead while audio is actually playing. Following while
+  // paused fights the operator: @tanstack/react-virtual re-attempts a
+  // scrollToIndex across measurement passes for dynamically-sized rows, so a
+  // standing "scroll to the active row" instruction pulls the view back every
+  // time a manual scroll re-measures — which also silently undid search jumps
+  // (merge-and-search-plan.md §4.3).
   useEffect(() => {
-    if (activeIndex >= 0) {
+    if (isPlaying && activeIndex >= 0) {
       virtualizer.scrollToIndex(activeIndex, { align: 'auto' })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIndex])
+  }, [activeIndex, isPlaying])
+
+  useEffect(() => {
+    if (focusIndex !== undefined && focusIndex >= 0) {
+      virtualizer.scrollToIndex(focusIndex, { align: 'center' })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusIndex])
 
   if (items.length === 0) {
     return <p className="kt-meta">{emptyLabel}</p>
@@ -65,7 +84,21 @@ export function TimedList<T extends TimedItem>({
         paddingInline: 'var(--kt-space-4)',
       }}
     >
-      <div style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
+      {/* flexShrink: 0 is load-bearing, not defensive. The vendored `.kt-list`
+          is `display: flex; flex-direction: column` (base.css), which makes this
+          spacer a flex item — and flexbox then shrinks its virtual height
+          (~82000px on a long lesson) down to the height of the rows that happen
+          to be rendered. The scrollbar ends up describing the rendered window
+          instead of the whole list, and every scrollToIndex lands short and has
+          to converge by inches. */}
+      <div
+        style={{
+          height: virtualizer.getTotalSize(),
+          flexShrink: 0,
+          position: 'relative',
+          width: '100%',
+        }}
+      >
         {virtualizer.getVirtualItems().map((virtualRow) => {
           const item = items[virtualRow.index]
           const active = virtualRow.index === activeIndex
@@ -74,7 +107,7 @@ export function TimedList<T extends TimedItem>({
               key={virtualRow.index}
               ref={virtualizer.measureElement}
               data-index={virtualRow.index}
-              className="kt-row"
+              className={['kt-row', rowClassName?.(item, virtualRow.index)].filter(Boolean).join(' ')}
               aria-current={active ? 'true' : undefined}
               style={{
                 position: 'absolute',
@@ -85,7 +118,7 @@ export function TimedList<T extends TimedItem>({
               }}
               onClick={() => seek(item.start_ms)}
             >
-              {renderRow(item)}
+              {renderRow(item, virtualRow.index)}
             </div>
           )
         })}

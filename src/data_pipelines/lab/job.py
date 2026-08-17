@@ -15,6 +15,10 @@ class LabJob(ABC, Generic[ParamsT, ResultT]):
     description: ClassVar[str]
     version: ClassVar[str]
     version_notes: ClassVar[str]
+    # False for job types that run on prior job results rather than raw audio
+    # (merge.py) — run_job.py skips the cache/download checks for those, and
+    # JobContext.audio_path is None.
+    needs_audio: ClassVar[bool] = True
 
     @classmethod
     @abstractmethod

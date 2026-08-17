@@ -33,7 +33,8 @@ class LabJobRead(BaseModel):
     # dict[str, Any]: opaque per job_type at the DB layer (AL §5.2) — same
     # reasoning as LabJobRow.params/result_json.
     params: dict[str, Any]
-    model_id: str
+    # None for job types that run no model (the merge job) — see LabJobRow.model_id.
+    model_id: str | None
     result_json: dict[str, Any] | None
     log: str | None
     error: str | None

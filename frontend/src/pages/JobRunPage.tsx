@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { createJob, getJob, listLabLessons, listLessonJobs } from '../api/lab'
@@ -20,6 +20,18 @@ interface DiarizationParamsInput {
   model_id: string
 }
 
+interface MergeParamsInput {
+  transcribe_job_id: number | null
+  diarize_job_id: number | null
+  assignment: 'max_overlap' | 'midpoint'
+}
+
+type JobParamsInput = TranscriptionParamsInput | DiarizationParamsInput | MergeParamsInput
+
+// The newest done job of a type — `jobs` arrives sorted started_at desc.
+const latestDone = (jobs: LabJob[], jobType: string) =>
+  jobs.find((j) => j.job_type === jobType && j.status === 'done')
+
 const JOB_TYPE_DEFS = [
   {
     key: 'transcribe',
@@ -29,13 +41,45 @@ const JOB_TYPE_DEFS = [
       beam_size: 5,
       initial_prompt: '',
     }),
+    blockedReason: () => undefined,
   },
   {
     key: 'diarize',
     label: 'זיהוי דוברים',
     defaultParams: (): DiarizationParamsInput => ({ model_id: 'ivrit-ai/pyannote-speaker-diarization-3.1' }),
+    blockedReason: () => undefined,
+  },
+  {
+    key: 'merge',
+    label: 'מיזוג תמלול ודוברים',
+    // Prefilled from the lesson's own newest done runs, since a merge names its
+    // inputs by id (merge-and-search-plan.md §3.3).
+    defaultParams: (jobs: LabJob[]): MergeParamsInput => ({
+      transcribe_job_id: latestDone(jobs, 'transcribe')?.id ?? null,
+      diarize_job_id: latestDone(jobs, 'diarize')?.id ?? null,
+      assignment: 'max_overlap',
+    }),
+    // A form that can only fail validation is worse than saying why up front.
+    blockedReason: (jobs: LabJob[]) =>
+      latestDone(jobs, 'transcribe') === undefined || latestDone(jobs, 'diarize') === undefined
+        ? 'יש להריץ תמלול וזיהוי דוברים לפני המיזוג'
+        : undefined,
   },
 ] as const
+
+// True when a transcribe/diarize run newer than the ones the merge consumed has
+// finished — the failure mode most likely to confuse (re-transcribe, then wonder
+// why the merged text didn't change).
+function staleMergeSources(jobs: LabJob[]): boolean {
+  const merge = jobs.find((j) => j.job_type === 'merge' && j.status === 'done')
+  if (!merge) return false
+  const sources = (merge.result_json as { source_job_ids?: Record<string, number> } | null)?.source_job_ids
+  if (!sources) return false
+  return (
+    (latestDone(jobs, 'transcribe')?.id ?? 0) > (sources.transcription ?? 0) ||
+    (latestDone(jobs, 'diarize')?.id ?? 0) > (sources.diarization ?? 0)
+  )
+}
 
 export function JobRunPage() {
   const { lessonId } = useParams()
@@ -56,8 +100,13 @@ export function JobRunPage() {
     queryFn: () => listLessonJobs(id),
     refetchInterval: (query) => (query.state.data?.some((j) => j.status === 'running') ? 3000 : false),
   })
-  const transcribeJob = jobs?.find((j) => j.job_type === 'transcribe')
-  const diarizeJob = jobs?.find((j) => j.job_type === 'diarize')
+  // Results come from the newest *done* run of each type, not the newest run:
+  // a failed re-run shouldn't blank out results that were successfully produced
+  // before it. The per-type panels below still show the newest run whatever its
+  // status — that's the one whose failure the operator needs to see.
+  const transcribeJob = jobs && latestDone(jobs, 'transcribe')
+  const diarizeJob = jobs && latestDone(jobs, 'diarize')
+  const mergeJob = jobs && latestDone(jobs, 'merge')
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--kt-space-5)' }}>
@@ -87,13 +136,22 @@ export function JobRunPage() {
               lessonId={id}
               jobTypeKey={def.key}
               label={def.label}
-              defaultParams={def.defaultParams()}
+              defaultParams={def.defaultParams(jobs)}
+              blockedReason={def.blockedReason(jobs)}
+              staleSources={def.key === 'merge' ? staleMergeSources(jobs) : false}
               initialJob={latest}
             />
           )
         })}
 
-      {lesson && <LessonResults lessonId={id} transcribeJob={transcribeJob} diarizeJob={diarizeJob} />}
+      {lesson && (
+        <LessonResults
+          lessonId={id}
+          transcribeJob={transcribeJob}
+          diarizeJob={diarizeJob}
+          mergeJob={mergeJob}
+        />
+      )}
     </div>
   )
 }
@@ -103,12 +161,16 @@ function JobTypePanel({
   jobTypeKey,
   label,
   defaultParams,
+  blockedReason,
+  staleSources,
   initialJob,
 }: {
   lessonId: number
   jobTypeKey: string
   label: string
-  defaultParams: TranscriptionParamsInput | DiarizationParamsInput
+  defaultParams: JobParamsInput
+  blockedReason: string | undefined
+  staleSources: boolean
   initialJob: LabJob | undefined
 }) {
   const queryClient = useQueryClient()
@@ -116,6 +178,16 @@ function JobTypePanel({
   const [showForm, setShowForm] = useState(initialJob === undefined)
   const [paramsText, setParamsText] = useState(() => JSON.stringify(defaultParams, null, 2))
   const [formError, setFormError] = useState<string | null>(null)
+  const [touched, setTouched] = useState(false)
+
+  // The merge panel's defaults are the ids of the lesson's newest done
+  // transcribe/diarize runs, which can finish *after* this panel mounted (run
+  // transcribe, then diarize, then merge, all on one page). Re-prefill while the
+  // operator hasn't typed in the box; once they have, their text wins.
+  const defaultParamsText = JSON.stringify(defaultParams, null, 2)
+  useEffect(() => {
+    if (!touched) setParamsText(defaultParamsText)
+  }, [defaultParamsText, touched])
 
   const { data: job } = useQuery({
     queryKey: ['lab', 'job', jobId],
@@ -150,10 +222,14 @@ function JobTypePanel({
         {job && <JobStatusBadge status={job.status} />}
       </div>
 
+      {blockedReason && !job && <p className="kt-meta">{blockedReason}</p>}
+      {staleSources && <p className="kt-meta">המיזוג מבוסס על ריצה ישנה יותר — כדאי להריץ שוב.</p>}
+
       {job && !showForm && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--kt-space-3)' }}>
           <p className="kt-meta">
-            <span className="kt-time">{job.model_id}</span> · הופעל{' '}
+            {/* null for job types that run no model — the merge (§2.4). */}
+            <span className="kt-time">{job.model_id ?? '—'}</span> · הופעל{' '}
             <span className="kt-time">{new Date(job.started_at).toLocaleString('he-IL')}</span>
           </p>
           {isRunning && <p>מריץ...</p>}
@@ -212,7 +288,7 @@ function JobTypePanel({
         </div>
       )}
 
-      {showForm && (
+      {showForm && blockedReason === undefined && (
         <div className="kt-form">
           <div className="kt-field">
             <label htmlFor={`${jobTypeKey}-params`}>פרמטרים (JSON)</label>
@@ -221,7 +297,10 @@ function JobTypePanel({
               dir="ltr"
               rows={5}
               value={paramsText}
-              onChange={(e) => setParamsText(e.target.value)}
+              onChange={(e) => {
+                setParamsText(e.target.value)
+                setTouched(true)
+              }}
               // admin.css's `.kt-field textarea[dir="ltr"] { text-align: end }` is
               // meant for short single-line English fields (hug the RTL form's
               // right edge) — right-aligning every line of multi-line JSON makes
@@ -240,7 +319,10 @@ function JobTypePanel({
             <button
               type="button"
               className="kt-btn kt-btn--secondary"
-              onClick={() => setParamsText(JSON.stringify(defaultParams, null, 2))}
+              onClick={() => {
+                setParamsText(defaultParamsText)
+                setTouched(false)
+              }}
             >
               איפוס לברירת מחדל
             </button>

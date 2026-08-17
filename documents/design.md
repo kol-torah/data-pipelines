@@ -204,8 +204,17 @@ that actually matters. No clustering-parameter tuning is planned unless this ass
 turns out to be wrong in practice.
 
 **Merging diarization output with the transcript** (assigning a speaker label to each
-transcript segment by timestamp overlap) is deferred to the main pipeline implementation
-— it wasn't built as part of this lab experimentation.
+transcript segment by timestamp overlap) is implemented in the lab, as a third job type
+(`src/data_pipelines/lab/merge.py`, `admin-lab.md` §5.3): each segment takes the speaker
+whose turn overlaps it most (a `midpoint` rule is available as a params option to compare
+against), and the host is the label with the most total speaking time. `assign_speakers()`
+and `summarize_speakers()` are plain functions over the two result models with no
+framework imports, so the main pipeline stage can import them unchanged once a
+configuration wins (§8.5) rather than reimplementing the rule.
+
+Not attempted: **splitting a segment that straddles a speaker change.** Whisper segments
+carry no word-level timings here, so a split would be a guess at where in the string to
+cut; doing it properly means requesting word timestamps in the transcription job first.
 
 **Implementation note (pyannote.audio 4.x): feed it a preloaded waveform, not a file
 path.** The pinned pipeline decodes file paths via `torchcodec`, whose probed container

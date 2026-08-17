@@ -35,14 +35,15 @@ class DiarizeJob(LabJob[DiarizationParams, DiarizationResult]):
             raise RuntimeError(f"pyannote.audio could not load pipeline {params.model_id!r}")
         pipeline.to(device)
 
-        print(f"diarizing {ctx.audio_path}")
+        audio_path = ctx.require_audio()
+        print(f"diarizing {audio_path}")
         # Loaded as an in-memory waveform, not passed as a file path: pyannote.audio
         # 4.x decodes file paths via torchcodec, whose probed container duration can
         # disagree by a few hundred samples with what actually decodes for lossy
         # formats (mp3/opus) — pyannote's own crop() then raises on the mismatch.
         # A preloaded waveform sidesteps that entirely (the library's own documented
         # workaround, pyannote/audio/core/io.py's AudioFileDocString).
-        data, sample_rate = sf.read(str(ctx.audio_path), dtype="float32", always_2d=True)
+        data, sample_rate = sf.read(str(audio_path), dtype="float32", always_2d=True)
         waveform = torch.from_numpy(data.T)  # (channel, time), what pyannote expects
         start = time.monotonic()
         output = pipeline({"waveform": waveform, "sample_rate": sample_rate})

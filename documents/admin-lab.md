@@ -172,15 +172,24 @@ see §4.3. Unaffected by the React/backend split in §1.2: the backend API proce
   a launch button — this is what makes a page refresh safe (§4.3).
 - **Live status.** Polls `lab_jobs` (§5.1) on a short interval; per-job status, timing,
   and (once done) results appear without a full page reload.
-- **Results view.** Transcript segments and diarization turns as two synced, clickable
-  lists sharing one continuously-playing audio player — clicking a row seeks playback to
-  that timestamp instantly, with the currently-playing segment highlighted as playback
-  moves past it. Not merged (§1); side by side is enough to eyeball how well the two
-  agree. Each diarization turn gets **two cues, not one**: a colour for host/not-host
-  (a heuristic, computed client-side — see §4.7) and the raw speaker label
-  (`SPEAKER_00`, `SPEAKER_03`, ...) as text alongside it. Diarization quality itself is
-  still unknown at this point — showing both is what lets an operator tell whether the
-  heuristic is right by checking it against the raw labels, not just trust it.
+- **Results view.** Clickable, virtualized lists sharing one continuously-playing audio
+  player — clicking a row seeks playback to that timestamp instantly, with the
+  currently-playing segment highlighted as playback moves past it. **What is listed
+  depends on whether a merge job (§5.3) has run for that lesson:**
+  - **With a merge:** one list, not two. Each transcript segment carries the speaker
+    the merge assigned it — a chip reading `מנחה` or `שואל N` (shown where the speaker
+    changes) and a thin green/gold accent per row (host / anyone else).
+  - **Without one:** transcript segments and diarization turns side by side, unmerged —
+    enough to eyeball how well the two agree. Turns show raw labels only; *which* label
+    is the host is a merge-job output (§4.7), not a display-time guess.
+
+  Either way the raw `SPEAKER_00`-style label stays visible next to the friendly one.
+  Diarization quality is still unknown, so showing both is what lets an operator tell
+  whether the host/asker assignment is right by checking it against the raw labels
+  rather than trusting it.
+- **Transcript search.** Find a phrase inside the lesson on screen — matches are marked
+  inline, with a counter and next/previous that scroll the list to each occurrence
+  (§4.9). Within one lesson only; there is no catalogue-wide search.
 - **Log view.** The captured stdout/stderr of any completed job (success or failure), in
   a collapsed-by-default panel (§4.5).
 - **Catalogue admin.** Rabbi/series/lesson CRUD, carried over from `admin_app.py` (§1.4).
@@ -192,7 +201,9 @@ see §4.3. Unaffected by the React/backend split in §1.2: the backend API proce
   single click, and tracking N jobs at once, isn't built. Nothing in the data model
   blocks this later (`design.md` notes the lab is never expected to run over more than a
   few dozen lessons anyway).
-- The merge job type (§5.3).
+- ~~The merge job type (§5.3).~~ **Built** — see §5.3; the results view above describes
+  what it changed.
+- **Catalogue-wide transcript search** — §4.9's search covers one lesson at a time.
 - **Run comparison view** — pick two `lab_jobs` rows for a lesson, diff params and
   segments side by side. Needed, not optional: `design.md` §8.2's whole stated reason
   for the lab existing is "which of these configurations is best across these lessons,"
@@ -398,6 +409,11 @@ If a future need (e.g. querying inside results across many runs) calls for decom
 this into real columns or child tables, that's a migration on this one column, not a
 storage-layer rewrite — nothing else in the lab talks to the filesystem for results.
 
+Transcript search (§4.9) is deliberately *not* that need: it searches one lesson, whose
+result the browser has already fetched in full. The trigger for decomposing into rows
+remains a question about many lessons at once — and by `design.md` §8.5 that question
+belongs to production tables built by the real pipeline, not to `lab_jobs` leftovers.
+
 ### 4.5 Logging: `print()`, captured, written once at completion
 
 Job code — `TranscribeJob.run()`, `DiarizeJob.run()`, and anything they call — uses
@@ -435,19 +451,30 @@ frontend shows a loading state), rather than as a tracked subprocess: unlike a
 multi-minute model run, a single file download is short enough that blocking on it isn't
 worth the tracking machinery in §4.3.
 
-### 4.7 Host/not-host is a display-time heuristic, not a stored field
+### 4.7 Host/not-host is a merge-job output, cheap to redo — not a display-time guess
 
 `DiarizationTurn` (§4.2) stores exactly what `pyannote` returns — a raw speaker label
-per turn, nothing else. Which label (if any) is "the host" is computed in the frontend
-from that data (starting point: total speaking duration per label, matching
-`design.md` §3's observation that the host was the single dominant label on the test
-lesson) — not written back to `result_json`, and not a new column.
+per turn, nothing else. Which label is "the host" is decided by the merge job (§5.3)
+and stored in *its* result: `summarize_speakers()` in `lab/merge.py` takes the label with
+the most total speaking time (`design.md` §3's observation that the host was the single
+dominant label on the test lesson), and numbers the rest by first appearance, which is
+what the UI renders as `מנחה` / `שואל N`.
 
-This is deliberate, not a shortcut: the heuristic itself is unproven (§8), so the whole
-point of this view is to let it be checked against the raw labels, not trusted. Keeping
-it purely client-side means trying a different heuristic is an edit to display code, not
-a migration or a rerun of already-completed jobs — cheap exactly where cheapness matters
-while the rule is still being figured out.
+**This revises an earlier decision** to compute it in the frontend and never store it.
+The reasoning then was that the heuristic is unproven (§8), so changing it should cost an
+edit to display code rather than a migration or a rerun. The merge job satisfies that
+just as well: it runs no model and touches no audio, so re-running it after changing the
+rule takes about a second and one click — while keeping *one* implementation of the rule
+instead of one in Python and a second in TypeScript, free to drift apart.
+
+What that earlier decision was protecting is kept intact:
+
+- Nothing but the merge job's own `result_json` records it — no column on `lessons`, none
+  on `lab_jobs`; the row is disposable by construction (§4.4).
+- The raw label stays on screen next to the friendly one (§2), so the assignment can be
+  checked rather than trusted.
+- Speaker roles simply don't appear until a merge has run. A lesson with a diarization
+  and no merge shows raw labels — an honest description of what is known at that point.
 
 ### 4.8 Long-lesson navigation: virtual scroll plus time-jump
 
@@ -466,6 +493,39 @@ A two-hour Q&A show produces hundreds of segments and turns. Two decisions, not 
   virtualized lists move together, the same sync already used for click-to-seek (§2) —
   jumping is just a coarser way of moving the same shared position, not a separate
   mechanism.
+
+**The list follows the playhead only while audio is actually playing.** Following while
+paused fights the operator: the virtualizer re-attempts a pending "scroll to the active
+row" across measurement passes, so a standing instruction to follow pulls the view back
+from anywhere they scroll to — including search jumps (§4.9).
+
+### 4.9 Transcript search: in the browser, over normalized text
+
+Searching a lesson's transcript happens entirely client-side, in
+`frontend/src/lib/transcriptSearch.ts`. The whole transcript is already in the browser
+(§4.4 — one response, no pagination), and a long lesson is ~1500 segments, so an
+`indexOf` over an in-memory index answers every keystroke without a round trip. A
+backend endpoint would add latency to search data the client already holds; a Postgres
+`pg_trgm` index would earn nothing scanning one lesson's worth of rows (its moment comes
+with catalogue-wide search, which belongs to production tables — §4.4).
+
+**Matching is exact, over a normalized form of both text and query** — that normalization
+is the entire "fuzziness" budget, and it's symmetric, so it doesn't matter which side a
+difference is on:
+
+| Input | Rule | Why |
+| --- | --- | --- |
+| Niqqud, te'amim | removed | pasted text carries them, Whisper's output doesn't |
+| Bidi controls (`U+202B`, …) | removed | Whisper's Hebrew output is full of them, and they are invisible |
+| Geresh/gershayim, ASCII quotes | removed, no separator | `רמב״ם` = `רמב"ם` = `רמבם`; a space here would split the word |
+| Maqaf, other punctuation | → separator | `מרן, השולחן־ערוך` matches `מרן השולחן ערוך` |
+| Whitespace runs | collapsed | segment joins, spacing quirks |
+
+Segments are joined by a space in the index, so a phrase split across a segment boundary
+is still found and marked in both rows. Deliberately *not* normalized: final-form letters,
+and prefixes (`ו`/`ה`/`ב`/`ל`/`ש`) — plain substring matching already finds `שולחן ערוך`
+inside `בשולחן ערוך`, and folding prefixes would only add false positives. There is no
+stemming and nothing semantic: `שנה` does not find `שנים`, by design.
 
 ---
 
@@ -513,15 +573,34 @@ lesson picker's "what's been run on this lesson" view doesn't need a `UNION` acr
 per-type tables, and adding the merge job type is a new `LabJob` subclass and a new
 registry entry — no migration.
 
-### 5.3 Extensibility for the merge job
+### 5.3 The merge job
 
-When transcript/diarization merging (`design.md` §3) is ready to build, it becomes
-`class MergeJob(LabJob[MergeParams, MergeResult])` with `key = "merge"`, registered
-alongside the other two. Its `run()` differs from the other two in what it actually
-needs — prior `TranscribeJob`/`DiarizeJob` results rather than raw audio — which is
-exactly what `JobContext` (§4.1) already accommodates: it's built by `run_job.py` per
-job type, not a fixed signature every type must conform to. No schema change on
-`lab_jobs`.
+Transcript/diarization merging (`design.md` §3) is `class MergeJob(LabJob[MergeParams,
+MergeResult])` in `lab/merge.py`, `key = "merge"`, registered alongside the other two. As
+this section anticipated, it needs prior `TranscribeJob`/`DiarizeJob` results rather than
+raw audio, and `JobContext` (§4.1) absorbed that — it's built by `run_job.py` per job
+type, not a fixed signature every type must conform to. Two generic additions made it fit
+with no branch on `job_type` anywhere:
+
+- **`JobParams.source_job_ids()`** — a job type names the completed rows it consumes
+  (`{"transcription": …, "diarization": …}` for the merge, empty for the other two).
+  `run_job.py` resolves them and files their `result_json` under those names in
+  `JobContext.source_results`; the launch endpoint validates the same declaration up
+  front, so a reference to a missing, still-running, or other-lesson job is a 422 rather
+  than a subprocess that dies a second later. `merge.py` itself never sees a `Session`.
+- **`LabJob.needs_audio`** — `False` here, so the audio cache checks are skipped and
+  `JobContext.audio_path` is `None`. Jobs that do need audio read it through
+  `require_audio()` rather than carrying the `Optional` into their own code.
+
+**One schema change, not none:** `lab_jobs.model_id` is now nullable, because a merge
+runs no model and a sentinel string would pollute the one column that exists to be
+queried without JSON paths (§5.1). Everything else is as predicted — the result is an
+ordinary `result_json` blob (§4.4), no new table.
+
+Its result carries the merged segments (text, times, assigned raw label), the speaker
+summary that §4.7 describes, and a frozen copy of the source job ids — enough for the UI
+to render the merged view without re-reading the source jobs, and enough to notice when a
+newer transcribe/diarize run has since superseded what the merge consumed.
 
 ### 5.4 The `lab` schema outlives this lab
 
