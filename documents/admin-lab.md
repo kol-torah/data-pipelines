@@ -178,15 +178,20 @@ see §4.3. Unaffected by the React/backend split in §1.2: the backend API proce
   depends on whether a merge job (§5.3) has run for that lesson:**
   - **With a merge:** one list, not two. Each transcript segment carries the speaker
     the merge assigned it — a chip reading `מנחה` or `שואל N` (shown where the speaker
-    changes) and a thin green/gold accent per row (host / anyone else).
-  - **Without one:** transcript segments and diarization turns side by side, unmerged —
-    enough to eyeball how well the two agree. Turns show raw labels only; *which* label
-    is the host is a merge-job output (§4.7), not a display-time guess.
+    changes) and a thin green/gold accent per row (host / anyone else). The raw
+    `SPEAKER_00`-style label is the chip's **tooltip**, not text in the line: printed on
+    every chip it was noise, but it's still one hover away when an assignment looks
+    wrong.
+  - **Without one:** transcript segments and diarization turns side by side, unmerged.
+    Turns show raw labels only; *which* label is the host is a merge-job output (§4.7),
+    not a display-time guess.
 
-  Either way the raw `SPEAKER_00`-style label stays visible next to the friendly one.
-  Diarization quality is still unknown, so showing both is what lets an operator tell
-  whether the host/asker assignment is right by checking it against the raw labels
-  rather than trusting it.
+  **A switch above the lists moves between the two views even when a merge exists**, and
+  it earns its place: a wrong speaker on a row can come either from the merge assigning
+  it badly or from diarization drawing the turn boundary in the wrong place, and the raw
+  pair is the only view that tells those apart. Diarization quality is still unknown
+  (§8), so the ability to check the merged view against its own inputs matters more than
+  the tidiness of always showing one list.
 - **Transcript search.** Find a phrase inside the lesson on screen — matches are marked
   inline, with a counter and next/previous that scroll the list to each occurrence
   (§4.9). Within one lesson only; there is no catalogue-wide search.

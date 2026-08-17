@@ -46,6 +46,30 @@ class TestAssignSpeakers:
     def test_no_turns_leaves_every_segment_unassigned(self) -> None:
         assert assign_speakers([seg(0, 1_000), seg(1_000, 2_000)], []) == [None, None]
 
+    def test_start_rule_takes_whoever_was_speaking_when_the_segment_began(self) -> None:
+        turns = [turn(0, 10_000, "SPEAKER_00"), turn(10_000, 20_000, "SPEAKER_01")]
+        assert assign_speakers([seg(9_000, 15_000)], turns, AssignmentRule.START) == ["SPEAKER_00"]
+
+    def test_start_rule_in_a_gap_takes_the_speaker_who_was_just_talking(self) -> None:
+        # Not the *nearest* turn: a segment starting in a pause belongs to whoever
+        # had the floor, not to whoever picks it up next.
+        turns = [turn(0, 5_000, "SPEAKER_00"), turn(9_000, 15_000, "SPEAKER_01")]
+        assert assign_speakers([seg(8_800, 12_000)], turns, AssignmentRule.START) == ["SPEAKER_00"]
+
+    def test_start_rule_before_any_turn_falls_back_to_the_first(self) -> None:
+        turns = [turn(5_000, 10_000, "SPEAKER_00")]
+        assert assign_speakers([seg(0, 1_000)], turns, AssignmentRule.START) == ["SPEAKER_00"]
+
+    def test_short_reply_case_that_max_overlap_gets_wrong(self) -> None:
+        # The real shape from lesson 1 at 02:46 ("שלום הרב."): the segment starts
+        # in the last moments of the caller's turn but, because Whisper's end
+        # timestamps overrun, most of its interval lands in the host's next turn.
+        # Hand-labelled as the caller; max-overlap says the host, start says caller.
+        turns = [turn(45_963, 46_655, "CALLER"), turn(47_195, 48_173, "HOST")]
+        segment = seg(46_600, 47_360)
+        assert assign_speakers([segment], turns, AssignmentRule.MAX_OVERLAP) == ["HOST"]
+        assert assign_speakers([segment], turns, AssignmentRule.START) == ["CALLER"]
+
     def test_result_is_one_label_per_segment_in_order(self) -> None:
         turns = [turn(0, 10_000, "SPEAKER_00"), turn(10_000, 20_000, "SPEAKER_01")]
         segments = [seg(0, 1_000), seg(11_000, 12_000), seg(5_000, 6_000)]

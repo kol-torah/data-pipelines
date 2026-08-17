@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { LabJob } from '../api/lab'
 import type { DiarizationResult, MergeResult, SpeakerSummary, TranscriptionResult } from '../api/labResults'
 import { AudioPlayer } from './AudioPlayer'
@@ -60,12 +60,19 @@ export function LessonResults({
     [merged],
   )
 
-  // Search runs over whichever list is on screen — the merged one when a merge
-  // exists, the plain transcript otherwise (§4.1). A diarization-only view has
-  // no text to search, so the bar isn't rendered for it.
+  // A merge collapses the two lists into one, but the unmerged pair stays
+  // reachable: it's the only way to tell a bad *assignment* (merge's fault) from
+  // a bad *turn boundary* (diarization's fault), which admin-lab.md §2 wanted the
+  // side-by-side view for in the first place.
+  const [splitView, setSplitView] = useState(false)
+  const showMerged = merged !== undefined && !splitView
+
+  // Search runs over whichever list is on screen — the merged one, or the plain
+  // transcript. A diarization-only view has no text to search, so the bar isn't
+  // rendered for it.
   const searchTexts = useMemo(
-    () => (merged?.segments ?? transcription?.segments ?? []).map((s) => s.text),
-    [merged, transcription],
+    () => (showMerged ? merged.segments : (transcription?.segments ?? [])).map((s) => s.text),
+    [showMerged, merged, transcription],
   )
   const search = useTranscriptSearch(searchTexts)
 
@@ -86,10 +93,31 @@ export function LessonResults({
         <JumpControls />
       </div>
 
-      {/* One list, not two, once a merge exists (merge-and-search-plan.md §3.1):
-          the merged result carries the transcript text, so nothing is lost by
-          dropping the separate transcript/diarization cards. */}
-      {merged ? (
+      {merged && (
+        <div className="kt-view-switch">
+          <span className="kt-meta">תצוגה:</span>
+          <button
+            type="button"
+            className={`kt-btn${splitView ? ' kt-btn--secondary' : ''}`}
+            aria-pressed={!splitView}
+            onClick={() => setSplitView(false)}
+          >
+            ממוזג
+          </button>
+          <button
+            type="button"
+            className={`kt-btn${splitView ? '' : ' kt-btn--secondary'}`}
+            aria-pressed={splitView}
+            onClick={() => setSplitView(true)}
+          >
+            תמלול ודוברים בנפרד
+          </button>
+        </div>
+      )}
+
+      {/* One list, not two, once a merge exists (merge-and-search-plan.md §3.1) —
+          unless the switch above asks for the raw pair back. */}
+      {showMerged ? (
         <div className="kt-card">
           <h3>תמלול לפי דוברים</h3>
           <TranscriptSearchBar search={search} />
@@ -109,9 +137,11 @@ export function LessonResults({
                   <div className="kt-row-time kt-time">{formatTime(segment.start_ms)}</div>
                   <div className="kt-row-summary">
                     {changed && summary && (
-                      <span className="kt-speaker-head">
-                        <span className="kt-chip">{speakerLabel(summary)}</span>
-                        <span className="kt-time kt-speaker-raw">{segment.speaker}</span>
+                      // The raw pyannote label is verification detail, not
+                      // reading material — kept on hover rather than printed in
+                      // the line, where SPEAKER_06 next to every chip was noise.
+                      <span className="kt-chip kt-chip--speaker" title={segment.speaker ?? undefined}>
+                        {speakerLabel(summary)}
                       </span>
                     )}
                     <HighlightedText

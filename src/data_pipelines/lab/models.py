@@ -157,6 +157,10 @@ class AssignmentRule(StrEnum):
 
     MAX_OVERLAP = "max_overlap"
     MIDPOINT = "midpoint"
+    # Whoever was speaking when the segment began. Added after hand-labelling
+    # showed the two rules above hand short conversational turns to the wrong
+    # speaker — see merge.py's docstring on it.
+    START = "start"
 
 
 class SpeakerRole(StrEnum):

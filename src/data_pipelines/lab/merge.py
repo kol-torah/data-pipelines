@@ -38,15 +38,32 @@ def assign_speakers(
 
     Segments and turns come from two independent models, so their boundaries
     don't line up: a segment routinely straddles a speaker change. MAX_OVERLAP
-    gives it to whoever holds most of it; MIDPOINT to whoever holds its middle.
-    Neither splits the segment — that needs word-level timestamps, which
-    TranscribeJob doesn't currently request (see the plan's §2.2).
+    gives it to whoever holds most of it; MIDPOINT to whoever holds its middle;
+    START to whoever was already speaking when it began. None of them splits the
+    segment — that needs word-level timestamps, which TranscribeJob doesn't
+    currently request (see the plan's §2.2).
+
+    On measured data START is the most accurate of the three: against 28
+    hand-labelled segments of lesson 1 (02:19–04:19) it scored 28/28, versus
+    22/28 for MAX_OVERLAP and 18/28 for MIDPOINT. The reason is that Whisper's
+    segment *end* timestamps are unreliable — across that lesson its segments
+    cover 3249s against 5136s of diarized speech — so a short segment's interval
+    routinely runs past its own speaker's turn into the next one, and any rule
+    weighted by the whole interval then hands it to whoever spoke next. That
+    misfires exactly on the short back-and-forth ("שלום הרב." / "כן, שלום לך.")
+    where getting the speaker right matters most. MAX_OVERLAP remains the default
+    until this holds up on a second, harder window (several speakers, overlapping
+    speech), which is what the params option is for.
     """
     if not turns:
         return [None] * len(segments)
 
     labels: list[str | None] = []
     for segment in segments:
+        if assignment is AssignmentRule.START:
+            labels.append(_speaker_at(turns, segment.start_ms))
+            continue
+
         if assignment is AssignmentRule.MIDPOINT:
             midpoint = (segment.start_ms + segment.end_ms) // 2
             containing = next((t for t in turns if t.start_ms <= midpoint < t.end_ms), None)
@@ -63,6 +80,19 @@ def assign_speakers(
                 best, best_overlap = turn, overlap
         labels.append((best or _nearest(turns, segment)).speaker)
     return labels
+
+
+def _speaker_at(turns: list[DiarizationTurn], at_ms: int) -> str:
+    """Who holds the floor at `at_ms` — the turn containing it, or failing that
+    the most recent turn to have started before it (diarization leaves gaps, and
+    a segment starting inside one belongs to whoever was just speaking, not to
+    whoever speaks next). Falls back to the first turn for a segment that starts
+    before any turn at all."""
+    containing = [t for t in turns if t.start_ms <= at_ms < t.end_ms]
+    if containing:
+        return containing[0].speaker
+    started = [t for t in turns if t.start_ms <= at_ms]
+    return started[-1].speaker if started else turns[0].speaker
 
 
 def _nearest(turns: list[DiarizationTurn], segment: TranscriptSegment) -> DiarizationTurn:
@@ -113,8 +143,13 @@ def summarize_speakers(turns: list[DiarizationTurn]) -> list[SpeakerSummary]:
 class MergeJob(LabJob[MergeParams, MergeResult]):
     key = "merge"
     description = "Assign diarization speakers to transcript segments"
-    version = "1"
-    version_notes = "Initial version: max-overlap assignment, host = longest total speaking time."
+    version = "2"
+    version_notes = (
+        "Adds the start-of-segment assignment rule (assignment='start'), which beat "
+        "max-overlap 28/28 vs 22/28 on hand-labelled data. Default unchanged "
+        "(max_overlap) pending a second labelled window. v1: max-overlap assignment, "
+        "host = longest total speaking time."
+    )
     needs_audio = False
 
     @classmethod

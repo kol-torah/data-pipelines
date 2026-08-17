@@ -78,12 +78,16 @@
 .kt-row--other { border-inline-start: 3px solid var(--kt-gold); }
 .kt-row--host, .kt-row--other { padding-inline-start: var(--kt-space-3); }
 
-/* Chip + raw pyannote label, shown only on the row where the speaker changes. */
-.kt-speaker-head {
-  display: inline-flex; align-items: center; gap: var(--kt-space-2);
-  margin-inline-end: var(--kt-space-2);
+/* Speaker chip, shown only on the row where the speaker changes. The raw
+   pyannote label lives in its title attribute (hover), not in the line. */
+.kt-chip--speaker { margin-inline-end: var(--kt-space-2); cursor: help; }
+
+/* Merged vs. raw-pair switch — the filled button is the active view, so it
+   reuses .kt-btn/.kt-btn--secondary rather than needing a new treatment. */
+.kt-view-switch {
+  display: flex; align-items: center; gap: var(--kt-space-2);
+  margin-bottom: calc(-1 * var(--kt-space-2));
 }
-.kt-speaker-raw { font-size: var(--kt-size-small); color: var(--kt-text-subtle); }
 
 /* ============ Transcript search (merge-and-search-plan.md §4.3) ============ */
 .kt-search {
