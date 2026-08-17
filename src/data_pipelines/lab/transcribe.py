@@ -61,9 +61,14 @@ class TranscribeJob(LabJob[TranscriptionParams, TranscriptionResult]):
             # transformers' Pipeline.tokenizer is typed as a broad union (its stub
             # covers every pipeline kind, most of which have no tokenizer at all),
             # so pyright can't see get_prompt_ids() on the ASR case specifically.
+            #
+            # get_prompt_ids() always returns a CPU tensor — the tokenizer has no
+            # notion of which device the model is on — so on a CUDA run this has
+            # to be moved explicitly, or generate()'s torch.cat of prompt_ids
+            # against the (GPU) decoder input ids fails with a device mismatch.
             generate_kwargs["prompt_ids"] = asr.tokenizer.get_prompt_ids(  # type: ignore[union-attr]
                 params.initial_prompt, return_tensors="pt"
-            )
+            ).to(device)
 
         print(f"transcribing {ctx.audio_path}")
         start = time.monotonic()
@@ -75,14 +80,24 @@ class TranscribeJob(LabJob[TranscriptionParams, TranscriptionResult]):
         # with return_timestamps=True on one audio path, it's actually always this
         # one dict shape (text + chunks) at runtime.
         chunks = output["chunks"]  # type: ignore[index]
-        segments = [
-            TranscriptSegment(
-                start_ms=round(chunk["timestamp"][0] * 1000),
-                end_ms=round((chunk["timestamp"][1] or chunk["timestamp"][0]) * 1000),
-                text=chunk["text"].strip(),
+        segments = []
+        for chunk in chunks:
+            chunk_start, chunk_end = chunk["timestamp"]
+            # Whisper can fail to predict a timestamp token at either edge of a
+            # chunk (not just the end — confirmed in practice, not just in
+            # theory: a short beam_size + initial_prompt combination produced a
+            # None *start* here). A chunk missing both isn't placeable at all;
+            # one missing is filled in from the other.
+            if chunk_start is None and chunk_end is None:
+                print(f"skipping chunk with no timestamps at all: {chunk['text']!r}")
+                continue
+            chunk_start = chunk_start if chunk_start is not None else chunk_end
+            chunk_end = chunk_end if chunk_end is not None else chunk_start
+            segments.append(
+                TranscriptSegment(
+                    start_ms=round(chunk_start * 1000), end_ms=round(chunk_end * 1000), text=chunk["text"].strip()
+                )
             )
-            for chunk in chunks
-        ]
         return TranscriptionResult(
             segments=segments, model_id=params.model_id, params=params, elapsed_s=elapsed_s, device=device
         )

@@ -5,13 +5,14 @@ endpoint the picker calls when a stored-but-not-cached row is selected."""
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from data_pipelines.admin_lab_api.db import get_db
 from data_pipelines.admin_lab_api.schemas.lessons import CacheStatus, LabLessonRead
 from data_pipelines.config import get_settings
 from data_pipelines.db.models import Lesson, Series
+from data_pipelines.lab.models import LabJobRow
 from data_pipelines.pipelines.discover.storage import download_from_bucket
 
 router = APIRouter(prefix="/api/lab", tags=["lab-lessons"])
@@ -67,6 +68,26 @@ def list_lab_lessons(
             query = query.where(Lesson.series_id == series_id)
         if lesson_type is not None:
             query = query.where(Lesson.lesson_type == lesson_type)
+    lessons = db.scalars(query).all()
+    return [_lesson_read(lesson) for lesson in lessons]
+
+
+@router.get("/recent-lessons")
+def list_recent_lessons(db: DbSession, limit: int = 10) -> list[LabLessonRead]:
+    """Lessons with the most recently started lab_jobs — lets an operator get back
+    to a lesson they just ran a job on without re-filtering the full picker."""
+    latest_per_lesson = (
+        select(LabJobRow.lesson_id, func.max(LabJobRow.started_at).label("last_run"))
+        .group_by(LabJobRow.lesson_id)
+        .subquery()
+    )
+    query = (
+        select(Lesson)
+        .join(latest_per_lesson, latest_per_lesson.c.lesson_id == Lesson.id)
+        .options(*_LOAD_OPTIONS)
+        .order_by(latest_per_lesson.c.last_run.desc())
+        .limit(limit)
+    )
     lessons = db.scalars(query).all()
     return [_lesson_read(lesson) for lesson in lessons]
 

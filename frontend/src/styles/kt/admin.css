@@ -3,6 +3,19 @@
    doesn't clobber these. Built from tokens.css's existing values only — no new
    colors or radii. Logical properties throughout (RTL-first, §0.1). */
 
+/* ============ .kt-row fix: long wrapped .kt-row-summary text shifts
+   .kt-row-time (base.css bug, not exercised by the vendored bundle's short
+   chapter titles) ============ */
+/* .kt-row is `display: flex` with no flex-shrink:0 on .kt-row-time (fixed
+   width: 50px) and no flex-grow on .kt-row-summary. Flexbox's default shrink
+   algorithm weights by each item's own flex-basis, so once .kt-row-summary's
+   *unwrapped* natural width badly overflows the row (any transcript segment
+   longer than a few words), .kt-row-time gets shrunk along with it — visibly
+   narrowing the timestamp column and shifting the wrapped text rightward on
+   any row whose text spans 2+ lines, while single-line rows stay correct. */
+.kt-row-time { flex-shrink: 0; }
+.kt-row-summary { flex: 1 1 0%; min-width: 0; }
+
 /* ============ Data table (no bundle-designed CRUD table — reuse .kt-row's
    border+padding rhythm, drop the timestamp column and active-row treatment) ============ */
 .kt-table { display: flex; flex-direction: column; }

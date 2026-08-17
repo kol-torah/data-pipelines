@@ -1,18 +1,31 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { listRabbis, listSeries } from '../api/catalogue'
-import { ensureCached, listLabLessons } from '../api/lab'
+import { ensureCached, listLabLessons, listRecentLessons } from '../api/lab'
+import type { LabLesson } from '../api/lab'
 import { CacheStatusBadge } from '../components/CacheStatusBadge'
 
 export function LessonPickerPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [rabbiId, setRabbiId] = useState<number | undefined>(undefined)
-  const [seriesId, setSeriesId] = useState<number | undefined>(undefined)
-  const [lessonType, setLessonType] = useState<string | undefined>(undefined)
-  const [idListText, setIdListText] = useState('')
   const [error, setError] = useState<string | null>(null)
+
+  // Filters live in the URL, not component state (mirrors SeriesPage/RabbisPage,
+  // admin-lab-plan.md §3.3's reasoning) — otherwise navigating to a lesson and
+  // back loses the filter and the list along with it.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const rabbiId = searchParams.get('rabbi_id') ? Number(searchParams.get('rabbi_id')) : undefined
+  const seriesId = searchParams.get('series_id') ? Number(searchParams.get('series_id')) : undefined
+  const lessonType = searchParams.get('lesson_type') ?? undefined
+  const idListText = searchParams.get('ids') ?? ''
+
+  const setParam = (key: string, value: string | undefined) => {
+    const next = new URLSearchParams(searchParams)
+    if (value) next.set(key, value)
+    else next.delete(key)
+    setSearchParams(next)
+  }
 
   const lessonIds = useMemo(() => {
     const ids = idListText
@@ -33,6 +46,8 @@ export function LessonPickerPage() {
     () => [...new Set((allSeries ?? []).map((s) => s.lesson_type))].sort(),
     [allSeries],
   )
+
+  const { data: recentLessons } = useQuery({ queryKey: ['lab', 'recent-lessons'], queryFn: () => listRecentLessons() })
 
   const hasFilter = rabbiId != null || seriesId != null || lessonType != null || lessonIds != null
   const { data: lessons, isPending } = useQuery({
@@ -71,8 +86,43 @@ export function LessonPickerPage() {
     ensureCachedMutation.mutate(lessonId)
   }
 
+  const renderLessonRow = (lesson: LabLesson) => {
+    const disabled = lesson.cache_status === 'not_stored'
+    const loading = pendingLessonId === lesson.id
+    return (
+      <div
+        key={lesson.id}
+        className={disabled ? 'kt-trow' : 'kt-trow kt-trow--link'}
+        style={disabled ? { opacity: 0.5 } : undefined}
+        onClick={() => !disabled && !loading && selectLesson(lesson.id, lesson.cache_status)}
+      >
+        <span className="kt-tcell">{lesson.title_he}</span>
+        <span className="kt-tcell">
+          {lesson.rabbi_name_he} — {lesson.series_name_he}
+        </span>
+        <span className="kt-tcell">{lesson.lesson_type}</span>
+        <span className="kt-tcell">{loading ? 'מוריד...' : <CacheStatusBadge status={lesson.cache_status} />}</span>
+      </div>
+    )
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--kt-space-5)' }}>
+      {recentLessons && recentLessons.length > 0 && (
+        <div className="kt-card">
+          <h2>לאחרונה נחקרו</h2>
+          <div className="kt-table">
+            <div className="kt-trow kt-trow--head">
+              <span className="kt-tcell">כותרת</span>
+              <span className="kt-tcell">רב / סדרה</span>
+              <span className="kt-tcell">סוג</span>
+              <span className="kt-tcell">מטמון</span>
+            </div>
+            {recentLessons.map(renderLessonRow)}
+          </div>
+        </div>
+      )}
+
       <div className="kt-card kt-form">
         <h2>בחירת שיעור</h2>
         <div style={{ display: 'flex', gap: 'var(--kt-space-4)', flexWrap: 'wrap' }}>
@@ -82,8 +132,11 @@ export function LessonPickerPage() {
               id="rabbi-filter"
               value={rabbiId ?? ''}
               onChange={(e) => {
-                setRabbiId(e.target.value ? Number(e.target.value) : undefined)
-                setSeriesId(undefined)
+                const next = new URLSearchParams(searchParams)
+                if (e.target.value) next.set('rabbi_id', e.target.value)
+                else next.delete('rabbi_id')
+                next.delete('series_id')
+                setSearchParams(next)
               }}
             >
               <option value="">הכל</option>
@@ -99,7 +152,7 @@ export function LessonPickerPage() {
             <select
               id="series-filter"
               value={seriesId ?? ''}
-              onChange={(e) => setSeriesId(e.target.value ? Number(e.target.value) : undefined)}
+              onChange={(e) => setParam('series_id', e.target.value || undefined)}
             >
               <option value="">הכל</option>
               {filteredSeries?.map((s) => (
@@ -117,7 +170,7 @@ export function LessonPickerPage() {
             <select
               id="type-filter"
               value={lessonType ?? ''}
-              onChange={(e) => setLessonType(e.target.value || undefined)}
+              onChange={(e) => setParam('lesson_type', e.target.value || undefined)}
             >
               <option value="">הכל</option>
               {lessonTypes.map((t) => (
@@ -133,7 +186,7 @@ export function LessonPickerPage() {
               id="id-list-filter"
               dir="ltr"
               value={idListText}
-              onChange={(e) => setIdListText(e.target.value)}
+              onChange={(e) => setParam('ids', e.target.value || undefined)}
               placeholder="123, 456"
             />
           </div>
@@ -155,27 +208,7 @@ export function LessonPickerPage() {
               <span className="kt-tcell">סוג</span>
               <span className="kt-tcell">מטמון</span>
             </div>
-            {lessons.map((lesson) => {
-              const disabled = lesson.cache_status === 'not_stored'
-              const loading = pendingLessonId === lesson.id
-              return (
-                <div
-                  key={lesson.id}
-                  className={disabled ? 'kt-trow' : 'kt-trow kt-trow--link'}
-                  style={disabled ? { opacity: 0.5 } : undefined}
-                  onClick={() => !disabled && !loading && selectLesson(lesson.id, lesson.cache_status)}
-                >
-                  <span className="kt-tcell">{lesson.title_he}</span>
-                  <span className="kt-tcell">
-                    {lesson.rabbi_name_he} — {lesson.series_name_he}
-                  </span>
-                  <span className="kt-tcell">{lesson.lesson_type}</span>
-                  <span className="kt-tcell">
-                    {loading ? 'מוריד...' : <CacheStatusBadge status={lesson.cache_status} />}
-                  </span>
-                </div>
-              )
-            })}
+            {lessons.map(renderLessonRow)}
           </div>
         )}
       </div>

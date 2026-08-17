@@ -200,7 +200,10 @@ function JobTypePanel({
               className="kt-btn kt-btn--secondary"
               onClick={() => {
                 setShowForm(true)
-                setParamsText(JSON.stringify(defaultParams, null, 2))
+                // Prefill with the params this job actually ran with, not the
+                // hardcoded defaults — the form's own "איפוס" button covers
+                // wanting the defaults back.
+                setParamsText(JSON.stringify(job.params, null, 2))
               }}
             >
               הרץ שוב
@@ -234,6 +237,21 @@ function JobTypePanel({
             <button type="button" className="kt-btn" onClick={() => launchMutation.mutate()}>
               הרץ
             </button>
+            <button
+              type="button"
+              className="kt-btn kt-btn--secondary"
+              onClick={() => setParamsText(JSON.stringify(defaultParams, null, 2))}
+            >
+              איפוס לברירת מחדל
+            </button>
+            {/* Only when there's a previous job to go back to — the very first
+                launch (no prior job yet) has no display behind the form to
+                return to. */}
+            {job && (
+              <button type="button" className="kt-btn kt-btn--secondary" onClick={() => setShowForm(false)}>
+                ביטול
+              </button>
+            )}
           </div>
         </div>
       )}

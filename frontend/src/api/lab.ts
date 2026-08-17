@@ -23,6 +23,8 @@ export function listLabLessons(filter: LabLessonFilter = {}): Promise<LabLesson[
   return apiFetch<LabLesson[]>(`/api/lab/lessons${qs ? `?${qs}` : ''}`)
 }
 
+export const listRecentLessons = () => apiFetch<LabLesson[]>('/api/lab/recent-lessons')
+
 export const ensureCached = (lessonId: number) =>
   apiFetch<LabLesson>(`/api/lab/lessons/${lessonId}/ensure-cached`, { method: 'POST' })
 
