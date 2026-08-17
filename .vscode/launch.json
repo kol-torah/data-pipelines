@@ -2,19 +2,6 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Streamlit: Admin app",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "streamlit",
-            "args": [
-                "run",
-                "${workspaceFolder}/src/data_pipelines/admin_app.py",
-                "--server.headless=true"
-            ],
-            "cwd": "${workspaceFolder}",
-            "justMyCode": true
-        },
-        {
             "name": "Frontend: Debug in Chrome",
             "type": "chrome",
             "request": "launch",

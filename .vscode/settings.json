@@ -1,9 +1,5 @@
 {
     "remote.portsAttributes": {
-        "8501": {
-            "label": "Streamlit admin",
-            "onAutoForward": "openBrowser"
-        },
         "5173": {
             "label": "Admin/lab frontend (Vite)",
             "onAutoForward": "openBrowser"

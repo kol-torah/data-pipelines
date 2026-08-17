@@ -1,12 +1,14 @@
 # Kol Torah — Admin & Lab
 
-**Status:** Draft for review — not yet built
-**Last updated:** 2026-08-12
-**Code:** `frontend/` (React, planned) + `src/data_pipelines/lab/` and
-`src/data_pipelines/admin_lab_api/` (Python, planned)
+**Status:** Implemented — first version built and in use (build plan:
+`documents/plans/implemented/admin-lab-plan.md`)
+**Last updated:** 2026-08-17
+**Code:** `frontend/` (React) + `src/data_pipelines/lab/` and
+`src/data_pipelines/admin_lab_api/` (Python)
 
-Supersedes `admin.md` (the Streamlit admin app) and the Streamlit/Chainlit stack
-decisions in `design.md` §8.2 — see §1.2–§1.4.
+Replaced the Streamlit admin app, which has been **removed** from the codebase —
+`admin.md` is now a tombstone, not a spec of anything that exists. Also supersedes the
+Streamlit/Chainlit stack decisions in `design.md` §8.2 — see §1.2–§1.4.
 
 ---
 
@@ -128,15 +130,21 @@ this runs locally, for one operator, so there's nothing to authenticate against.
 is built for now. Revisit alongside §1.1 once there's an actual shared/hosted deployment
 of this tool, not before.
 
-### 1.4 Supersedes `admin.md` and `admin_app.py`
+### 1.4 Replaced `admin.md` and `admin_app.py` — both now gone
 
-The existing Streamlit admin app (`src/data_pipelines/admin_app.py`, specced in
-`admin.md`) — rabbi/series CRUD, lesson browsing — is dropped, not kept alongside this.
-Its functionality moves into this app instead, as ordinary CRUD screens over the same
-catalogue tables. This lets an operator go from "here's a lesson in the catalogue" to
-"run a transcription job on it" to "here are the results" without switching apps.
-`admin.md` becomes stale once this lands; retiring or rewriting it is a follow-up, not
-done as part of this document.
+**Done, not planned.** The Streamlit admin app — rabbi/series CRUD, lesson browsing —
+was dropped rather than kept alongside this one. `src/data_pipelines/admin_app.py` is
+deleted, `streamlit` is out of `pyproject.toml`, and the editor launch config and
+port-forward entry for it (`.vscode/`, port 8501) are gone too; there is no Streamlit
+anywhere in this repo. `admin.md` was rewritten as a short "removed, here's what
+replaced it" tombstone, so older cross-references still resolve without sending a reader
+looking for code that no longer exists.
+
+Its functionality lives here instead, as ordinary CRUD screens over the same catalogue
+tables (`frontend/src/pages/{RabbisPage,SeriesPage,SeriesDetailPage}.tsx` over
+`admin_lab_api/routers/catalogue.py`). This lets an operator go from "here's a lesson in
+the catalogue" to "run a transcription job on it" to "here are the results" without
+switching apps.
 
 ### 1.5 Job execution stays a direct subprocess per click
 

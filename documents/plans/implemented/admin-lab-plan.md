@@ -743,8 +743,9 @@ visual design.
 ## 7. Related documents
 
 - `documents/admin-lab.md` — the durable architecture reference this plan implements.
-- `documents/admin.md` / `documents/plans/admin-updates-plan.md` — the Streamlit-era
-  specs Phase 2 supersedes (§3.4).
+- `documents/admin.md` (now a "removed" tombstone) /
+  `documents/plans/implemented/admin-updates-plan.md` — the Streamlit-era specs Phase 2
+  supersedes (§3.4). Streamlit itself is gone from the repo entirely.
 - `documents/design.md` §3, §7, §8 — transcription/diarization model choices, the
   `lab` schema decision, and the lab's principles, all assumed rather than re-derived
   here.
