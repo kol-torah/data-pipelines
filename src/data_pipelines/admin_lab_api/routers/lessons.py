@@ -32,11 +32,14 @@ def _lesson_read(lesson: Lesson) -> LabLessonRead:
     return LabLessonRead(
         id=lesson.id,
         series_id=lesson.series_id,
+        series_name_he=lesson.series.name_he,
         series_name_en=lesson.series.name_en,
+        rabbi_name_he=lesson.series.rabbi.name_he,
         rabbi_name_en=lesson.series.rabbi.name_en,
         title_he=lesson.title_he,
         title_en=lesson.title_en,
         lesson_type=lesson.lesson_type,
+        published_at=lesson.published_at,
         recorded_at=lesson.recorded_at,
         cache_status=_cache_status(lesson),
     )

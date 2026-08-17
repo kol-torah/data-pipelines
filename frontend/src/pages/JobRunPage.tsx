@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { createJob, getJob, listLabLessons, listLessonJobs } from '../api/lab'
 import type { LabJob } from '../api/lab'
 import { JobStatusBadge } from '../components/JobStatusBadge'
+import { LessonResults } from '../components/LessonResults'
 
 // Mirrors lab/models.py's TranscriptionParams/DiarizationParams (server-side
 // dict[str, Any] at the generic /api/lab/jobs boundary by design, AL §5.2 — these
@@ -46,10 +47,17 @@ export function JobRunPage() {
   })
   const lesson = lessons?.[0]
 
-  const { data: initialJobs } = useQuery({
+  // Polled independently of each JobTypePanel's own per-job status query below
+  // (which additionally does the self-heal check via GET /jobs/{id}) — this is
+  // only what feeds the results section fresh result_json once a job finishes,
+  // and only needs to poll while something might still be running.
+  const { data: jobs } = useQuery({
     queryKey: ['lab', 'lessons', id, 'jobs'],
     queryFn: () => listLessonJobs(id),
+    refetchInterval: (query) => (query.state.data?.some((j) => j.status === 'running') ? 3000 : false),
   })
+  const transcribeJob = jobs?.find((j) => j.job_type === 'transcribe')
+  const diarizeJob = jobs?.find((j) => j.job_type === 'diarize')
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--kt-space-5)' }}>
@@ -57,14 +65,22 @@ export function JobRunPage() {
         <h2>{lesson?.title_he ?? 'טוען...'}</h2>
         {lesson && (
           <p className="kt-meta">
-            {lesson.rabbi_name_en} — {lesson.series_name_en}
+            {lesson.rabbi_name_he} — {lesson.series_name_he}
+            {(lesson.recorded_at ?? lesson.published_at) && (
+              <>
+                {' · '}
+                <span className="kt-time">
+                  {new Date(lesson.recorded_at ?? lesson.published_at!).toLocaleDateString('he-IL')}
+                </span>
+              </>
+            )}
           </p>
         )}
       </div>
 
-      {initialJobs !== undefined &&
+      {jobs !== undefined &&
         JOB_TYPE_DEFS.map((def) => {
-          const latest = initialJobs.find((j) => j.job_type === def.key)
+          const latest = jobs.find((j) => j.job_type === def.key)
           return (
             <JobTypePanel
               key={def.key}
@@ -76,6 +92,8 @@ export function JobRunPage() {
             />
           )
         })}
+
+      {lesson && <LessonResults lessonId={id} transcribeJob={transcribeJob} diarizeJob={diarizeJob} />}
     </div>
   )
 }
@@ -93,6 +111,7 @@ function JobTypePanel({
   defaultParams: TranscriptionParamsInput | DiarizationParamsInput
   initialJob: LabJob | undefined
 }) {
+  const queryClient = useQueryClient()
   const [jobId, setJobId] = useState<number | undefined>(initialJob?.id)
   const [showForm, setShowForm] = useState(initialJob === undefined)
   const [paramsText, setParamsText] = useState(() => JSON.stringify(defaultParams, null, 2))
@@ -115,6 +134,9 @@ function JobTypePanel({
       setFormError(null)
       setJobId(created.id)
       setShowForm(false)
+      // So the parent's `jobs` poll (LessonResults' data source) picks up the
+      // new running job immediately instead of waiting for its next own trigger.
+      queryClient.invalidateQueries({ queryKey: ['lab', 'lessons', lessonId, 'jobs'] })
     },
     onError: (e) => setFormError(e instanceof Error ? e.message : String(e)),
   })
@@ -197,6 +219,14 @@ function JobTypePanel({
               rows={5}
               value={paramsText}
               onChange={(e) => setParamsText(e.target.value)}
+              // admin.css's `.kt-field textarea[dir="ltr"] { text-align: end }` is
+              // meant for short single-line English fields (hug the RTL form's
+              // right edge) — right-aligning every line of multi-line JSON makes
+              // it read as RTL-flowing, which is what this overrides.
+              style={{ textAlign: 'left', fontFamily: 'var(--kt-font-mono)' }}
+              // Field names (model_id, beam_size, initial_prompt) aren't English
+              // prose, so the browser's spellchecker just adds noise here.
+              spellCheck={false}
             />
           </div>
           {formError && <p className="kt-error">{formError}</p>}

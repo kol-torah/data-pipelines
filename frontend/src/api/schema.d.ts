@@ -205,6 +205,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lab/lessons/{lesson_id}/audio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Lesson Audio */
+        get: operations["get_lesson_audio_api_lab_lessons__lesson_id__audio_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -305,17 +322,21 @@ export interface components {
         };
         /**
          * LabLessonRead
-         * @description Built explicitly (not from_attributes) — series_name_en/rabbi_name_en are
-         *     joined, and cache_status is computed against local_cache_dir, neither a Lesson
-         *     attribute.
+         * @description Built explicitly (not from_attributes) — series_name_he/en and
+         *     rabbi_name_he/en are joined, and cache_status is computed against
+         *     local_cache_dir, none of them a Lesson attribute.
          */
         LabLessonRead: {
             /** Id */
             id: number;
             /** Series Id */
             series_id: number;
+            /** Series Name He */
+            series_name_he: string;
             /** Series Name En */
             series_name_en: string;
+            /** Rabbi Name He */
+            rabbi_name_he: string;
             /** Rabbi Name En */
             rabbi_name_en: string;
             /** Title He */
@@ -324,6 +345,8 @@ export interface components {
             title_en: string | null;
             /** Lesson Type */
             lesson_type: string;
+            /** Published At */
+            published_at: string | null;
             /** Recorded At */
             recorded_at: string | null;
             cache_status: components["schemas"]["CacheStatus"];
@@ -986,6 +1009,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LabJobRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_lesson_audio_api_lab_lessons__lesson_id__audio_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                lesson_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

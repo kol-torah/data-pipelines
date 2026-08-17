@@ -634,7 +634,11 @@ map onto exactly what AL §2/§4.8 ask for, so this is porting, not designing.
   (a two-hour Q&A lesson can have hundreds of segments vs. a handful of chapters), worth
   a quick visual check (§5.4) that dense ticks don't turn into visual noise; thin them
   (e.g. only diarization turn boundaries, which are far fewer) if so — a judgment call
-  to make against the real rendered output, not decided here. `.kt-times` shows
+  to make against the real rendered output, not decided here. **Resolved at
+  implementation time:** prefer diarization turn boundaries when a diarize job exists
+  (far fewer than segments); otherwise thin whichever set is in use (segments, if no
+  diarize job) to at most ~80 evenly-sampled ticks — a plain cap, not a density
+  calculation, since "wall of ticks" was the actual failure mode being avoided. `.kt-times` shows
   elapsed/total via `.kt-time` (mono, LTR-isolated, §0.1). Skip-back-15 and the
   "שיתוף מדקה זו" (share-from-minute) pill in `.kt-player-controls` are the public
   site's affordances, not needed here — reuse the row's structure/spacing, drop the
@@ -653,6 +657,24 @@ map onto exactly what AL §2/§4.8 ask for, so this is porting, not designing.
   timestamp, §0.1) already does exactly this — and the virtualizer scrolls it into view
   as playback passes it (AL §2, §4.8). Both lists react to the same shared position, not
   two independent ones.
+
+  **Resolved at implementation time — one shared `TimedList<T extends
+  {start_ms, end_ms}>` component, not two.** `SegmentList`/`TurnList` turned out to be
+  the same virtualizer/scroll/active-row/click-to-seek wiring with only the row's inner
+  content differing — real duplication risk (subtly diverging virtualizer setups), not
+  premature abstraction, so `TimedList` takes a `renderRow` render-prop instead. Segment
+  rows use `.kt-row-summary` alone (no `.kt-row-title` line) — transcript text reads as
+  body prose, not a heading. **A real CSS bug found here, worth flagging for any future
+  virtualized list reusing `.kt-row[aria-current]`:** the scroll container needs
+  `overflow-y: auto` to virtualize, but per the CSS Overflow spec, setting only one axis
+  away from `visible` forces the *other* axis to `auto` too — silently clipping
+  `.kt-row[aria-current]`'s own negative-margin "bleed to the card edge" (base.css) right
+  at the scroll container's boundary, so the green edge bar just doesn't render (wash and
+  bold timestamp still show, so it's easy to miss without literally sampling pixels).
+  Fix: give the scroll container `margin-inline: calc(-1 * var(--kt-space-4))` +
+  `padding-inline: var(--kt-space-4)` (cancels out visually, opens a same-size
+  unclipped buffer for the bleed to land in, since overflow clips at the padding edge,
+  not the content edge).
 - `DiarizationTurn` rows show **two cues** (AL §2): the raw speaker label
   (`SPEAKER_00`, ...) rendered with `.kt-time` (mono, LTR-isolated — §0.1 corrects this
   from a plain `dir="ltr"` span) instead of Hebrew-styled text, and host-vs-not

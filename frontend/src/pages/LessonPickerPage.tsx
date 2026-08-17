@@ -25,6 +25,10 @@ export function LessonPickerPage() {
   const { data: rabbis } = useQuery({ queryKey: ['rabbis'], queryFn: () => listRabbis() })
   const { data: allSeries } = useQuery({ queryKey: ['series'], queryFn: () => listSeries() })
   const filteredSeries = rabbiId != null ? allSeries?.filter((s) => s.rabbi_id === rabbiId) : allSeries
+  // SeriesRead only carries rabbi_name_en (schemas/catalogue.py) — rabbis is
+  // already loaded for the rabbi <select>, so look up name_he from there instead
+  // of adding a backend field for this one display case.
+  const rabbiNameHeById = useMemo(() => new Map(rabbis?.map((r) => [r.id, r.name_he])), [rabbis])
   const lessonTypes = useMemo(
     () => [...new Set((allSeries ?? []).map((s) => s.lesson_type))].sort(),
     [allSeries],
@@ -100,7 +104,10 @@ export function LessonPickerPage() {
               <option value="">הכל</option>
               {filteredSeries?.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name_he}
+                  {/* Disambiguate same-named series from different rabbis (e.g. two
+                      "שאלות ותשובות" series) — redundant once a single rabbi is
+                      selected, since filteredSeries is already scoped to them. */}
+                  {rabbiId == null ? `${s.name_he} — ${rabbiNameHeById.get(s.rabbi_id) ?? s.rabbi_name_en}` : s.name_he}
                 </option>
               ))}
             </select>
@@ -160,7 +167,7 @@ export function LessonPickerPage() {
                 >
                   <span className="kt-tcell">{lesson.title_he}</span>
                   <span className="kt-tcell">
-                    {lesson.rabbi_name_en} — {lesson.series_name_en}
+                    {lesson.rabbi_name_he} — {lesson.series_name_he}
                   </span>
                   <span className="kt-tcell">{lesson.lesson_type}</span>
                   <span className="kt-tcell">
