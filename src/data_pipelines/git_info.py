@@ -1,5 +1,5 @@
 """Git SHA and dirty flag for every lab_jobs row (design.md invariant 4,
-documents/plans/admin-lab-plan.md §4.3)."""
+documents/plans/implemented/admin-lab-plan.md §4.3)."""
 
 import subprocess
 

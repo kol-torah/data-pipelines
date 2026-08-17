@@ -1,8 +1,8 @@
 # Kol Torah — admin/lab frontend
 
 React + Vite + Tailwind v4, RTL-first. See `documents/admin-lab.md` and
-`documents/plans/admin-lab-plan.md` (repo root) for the why; this file is just the
-dev-loop mechanics.
+`documents/plans/implemented/admin-lab-plan.md` (repo root) for the why; this file is
+just the dev-loop mechanics.
 
 ## Running locally
 
@@ -22,7 +22,7 @@ Never use Tailwind's directional utilities (`ml-*`, `mr-*`, `pl-*`, `pr-*`, `lef
 `right-*`, `text-left`, `text-right`) — always the logical equivalents (`ms-*`, `me-*`,
 `ps-*`, `pe-*`, `start-*`, `end-*`). They map to CSS logical properties and flip
 automatically with `dir`, matching the vendored `base.css`'s own convention. See
-`documents/plans/admin-lab-plan.md` §2.2.
+`documents/plans/implemented/admin-lab-plan.md` §2.2.
 
 ## Styling
 
