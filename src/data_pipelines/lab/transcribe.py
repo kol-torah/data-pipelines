@@ -2,6 +2,7 @@
 fine-tune (design.md §3). No API/DB imports, so this is reusable later by the real
 pipeline stage 4, not just this app (admin-lab.md §6)."""
 
+import copy
 import time
 from typing import Any
 
@@ -34,10 +35,28 @@ class TranscribeJob(LabJob[TranscriptionParams, TranscriptionResult]):
             device=device,
         )
 
+        # One explicit GenerationConfig, not loose kwargs alongside the pipeline's
+        # own default one. transformers' ASR pipeline always injects
+        # self.generation_config into the generate() call unless the caller
+        # already supplied one (automatic_speech_recognition.py) — passing
+        # language/num_beams as separate generate_kwargs on top of that collides
+        # with it (newer transformers versions warn: "pass either a
+        # generation_config object OR all generation parameters explicitly, but
+        # not both"). Copying the pipeline's own config (not building one from
+        # scratch) keeps Whisper-specific fields it already carries — e.g.
+        # forced_decoder_ids, suppress_tokens — that a fresh GenerationConfig()
+        # wouldn't have.
+        generation_config = copy.deepcopy(asr.generation_config)
+        # GenerationConfig accepts arbitrary kwargs at construction (**kwargs), so
+        # its stub doesn't declare these Whisper-specific fields.
+        generation_config.language = "he"  # type: ignore[attr-defined]
+        generation_config.task = "transcribe"  # type: ignore[attr-defined]
+        generation_config.num_beams = params.beam_size
+
         # dict[str, Any]: transformers' generate_kwargs is a passthrough straight
-        # into GenerationConfig/generate(), which has no single typed shape —
-        # values here span str, int, and (for initial_prompt) a torch.Tensor.
-        generate_kwargs: dict[str, Any] = {"language": "he", "num_beams": params.beam_size}
+        # into generate(), which has no single typed shape — values here span a
+        # GenerationConfig and (for initial_prompt) a torch.Tensor.
+        generate_kwargs: dict[str, Any] = {"generation_config": generation_config}
         if params.initial_prompt:
             # transformers' Pipeline.tokenizer is typed as a broad union (its stub
             # covers every pipeline kind, most of which have no tokenizer at all),
