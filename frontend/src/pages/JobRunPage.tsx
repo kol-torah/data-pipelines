@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
-import { createJob, getJob, listLabLessons, listLessonJobs } from '../api/lab'
-import type { LabJob } from '../api/lab'
+import { useEffect, useMemo, useState } from 'react'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useParams, useSearchParams } from 'react-router-dom'
+import { createJob, getJob, listLabLessons, listLessonJobs, mergePreview } from '../api/lab'
+import type { LabJob, LabJobSummary } from '../api/lab'
 import { JobStatusBadge } from '../components/JobStatusBadge'
-import { LessonResults } from '../components/LessonResults'
+import { RunPicker, MAX_COMPARED_RUNS } from '../components/RunPicker'
+import { RunComparison, segmentsFor } from '../components/RunComparison'
+import type { RunColumn } from '../components/RunComparison'
 
 // Mirrors lab/models.py's TranscriptionParams/DiarizationParams (server-side
 // dict[str, Any] at the generic /api/lab/jobs boundary by design, AL §5.2 — these
@@ -29,7 +31,7 @@ interface MergeParamsInput {
 type JobParamsInput = TranscriptionParamsInput | DiarizationParamsInput | MergeParamsInput
 
 // The newest done job of a type — `jobs` arrives sorted started_at desc.
-const latestDone = (jobs: LabJob[], jobType: string) =>
+const latestDone = (jobs: LabJobSummary[], jobType: string) =>
   jobs.find((j) => j.job_type === jobType && j.status === 'done')
 
 const JOB_TYPE_DEFS = [
@@ -54,13 +56,13 @@ const JOB_TYPE_DEFS = [
     label: 'מיזוג תמלול ודוברים',
     // Prefilled from the lesson's own newest done runs, since a merge names its
     // inputs by id (merge-and-search-plan.md §3.3).
-    defaultParams: (jobs: LabJob[]): MergeParamsInput => ({
+  defaultParams: (jobs: LabJobSummary[]): MergeParamsInput => ({
       transcribe_job_id: latestDone(jobs, 'transcribe')?.id ?? null,
       diarize_job_id: latestDone(jobs, 'diarize')?.id ?? null,
       assignment: 'max_overlap',
     }),
     // A form that can only fail validation is worse than saying why up front.
-    blockedReason: (jobs: LabJob[]) =>
+    blockedReason: (jobs: LabJobSummary[]) =>
       latestDone(jobs, 'transcribe') === undefined || latestDone(jobs, 'diarize') === undefined
         ? 'יש להריץ תמלול וזיהוי דוברים לפני המיזוג'
         : undefined,
@@ -70,14 +72,15 @@ const JOB_TYPE_DEFS = [
 // True when a transcribe/diarize run newer than the ones the merge consumed has
 // finished — the failure mode most likely to confuse (re-transcribe, then wonder
 // why the merged text didn't change).
-function staleMergeSources(jobs: LabJob[]): boolean {
+function staleMergeSources(jobs: LabJobSummary[]): boolean {
   const merge = jobs.find((j) => j.job_type === 'merge' && j.status === 'done')
   if (!merge) return false
-  const sources = (merge.result_json as { source_job_ids?: Record<string, number> } | null)?.source_job_ids
-  if (!sources) return false
+  // From params, not result_json: list rows no longer carry results
+  // (run-comparison-plan.md §2.2), and the ids are in params anyway.
+  const params = merge.params as { transcribe_job_id?: number; diarize_job_id?: number }
   return (
-    (latestDone(jobs, 'transcribe')?.id ?? 0) > (sources.transcription ?? 0) ||
-    (latestDone(jobs, 'diarize')?.id ?? 0) > (sources.diarization ?? 0)
+    (latestDone(jobs, 'transcribe')?.id ?? 0) > (params.transcribe_job_id ?? 0) ||
+    (latestDone(jobs, 'diarize')?.id ?? 0) > (params.diarize_job_id ?? 0)
   )
 }
 
@@ -104,9 +107,74 @@ export function JobRunPage() {
   // a failed re-run shouldn't blank out results that were successfully produced
   // before it. The per-type panels below still show the newest run whatever its
   // status — that's the one whose failure the operator needs to see.
-  const transcribeJob = jobs && latestDone(jobs, 'transcribe')
-  const diarizeJob = jobs && latestDone(jobs, 'diarize')
-  const mergeJob = jobs && latestDone(jobs, 'merge')
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Selection lives in the URL, so a comparison is a link (run-comparison-plan.md
+  // §0). Defaults are computed, not written back: landing on the page shouldn't
+  // rewrite its own address.
+  const doneTranscribes = useMemo(
+    () => (jobs ?? []).filter((j) => j.job_type === 'transcribe' && j.status === 'done'),
+    [jobs],
+  )
+  const doneDiarizes = useMemo(
+    () => (jobs ?? []).filter((j) => j.job_type === 'diarize' && j.status === 'done'),
+    [jobs],
+  )
+
+  const runsParam = searchParams.get('runs')
+  const selectedIds = useMemo(() => {
+    const ids = runsParam
+      ? runsParam.split(',').map(Number).filter((n) => Number.isFinite(n))
+      : doneTranscribes.slice(0, 1).map((j) => j.id)
+    return ids.filter((id) => doneTranscribes.some((j) => j.id === id)).slice(0, MAX_COMPARED_RUNS)
+  }, [runsParam, doneTranscribes])
+
+  const refParam = Number(searchParams.get('ref'))
+  const referenceId = selectedIds.includes(refParam) ? refParam : selectedIds[0]
+
+  const diarizeParam = searchParams.get('diarize')
+  const diarizeId =
+    diarizeParam === 'none'
+      ? undefined
+      : diarizeParam !== null && doneDiarizes.some((j) => j.id === Number(diarizeParam))
+        ? Number(diarizeParam)
+        : doneDiarizes[0]?.id
+
+  const setSelection = (next: { runs: number[]; ref: number | undefined; diarize: number | undefined }) => {
+    const params = new URLSearchParams(searchParams)
+    params.set('runs', next.runs.join(','))
+    if (next.ref !== undefined) params.set('ref', String(next.ref))
+    params.set('diarize', next.diarize === undefined ? 'none' : String(next.diarize))
+    setSearchParams(params, { replace: true })
+  }
+
+  // Results come per run, not from the list — the list carries no result_json.
+  const runQueries = useQueries({
+    queries: selectedIds.map((jobId) => ({
+      queryKey: ['lab', 'job', jobId],
+      queryFn: () => getJob(jobId),
+      staleTime: Infinity, // a completed run's result never changes
+    })),
+  })
+  const loadedRuns = runQueries.map((query) => query.data).filter((job): job is LabJob => job !== undefined)
+
+  const { data: previews } = useQuery({
+    queryKey: ['lab', 'merge-preview', diarizeId, selectedIds],
+    queryFn: () => mergePreview(diarizeId as number, selectedIds),
+    enabled: diarizeId !== undefined && loadedRuns.length === selectedIds.length && selectedIds.length > 0,
+    staleTime: Infinity,
+  })
+
+  const columns: RunColumn[] = useMemo(
+    () =>
+      loadedRuns.map((job, index) => ({
+        job,
+        segments: segmentsFor(job, previews?.[index]),
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [loadedRuns.map((job) => job.id).join(','), previews],
+  )
+  const referenceIndex = Math.max(0, columns.findIndex((column) => column.job.id === referenceId))
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--kt-space-5)' }}>
@@ -144,12 +212,23 @@ export function JobRunPage() {
           )
         })}
 
-      {lesson && (
-        <LessonResults
+      {doneTranscribes.length > 0 && (
+        <RunPicker
+          transcribeRuns={doneTranscribes}
+          diarizeRuns={doneDiarizes}
+          selectedIds={selectedIds}
+          referenceId={referenceId}
+          diarizeId={diarizeId}
+          onChange={setSelection}
+        />
+      )}
+
+      {lesson && columns.length > 0 && (
+        <RunComparison
           lessonId={id}
-          transcribeJob={transcribeJob}
-          diarizeJob={diarizeJob}
-          mergeJob={mergeJob}
+          columns={columns}
+          referenceIndex={referenceIndex}
+          speakers={previews?.[0]?.speakers ?? []}
         />
       )}
     </div>
@@ -171,7 +250,7 @@ function JobTypePanel({
   defaultParams: JobParamsInput
   blockedReason: string | undefined
   staleSources: boolean
-  initialJob: LabJob | undefined
+  initialJob: LabJobSummary | undefined
 }) {
   const queryClient = useQueryClient()
   const [jobId, setJobId] = useState<number | undefined>(initialJob?.id)
@@ -193,7 +272,8 @@ function JobTypePanel({
     queryKey: ['lab', 'job', jobId],
     queryFn: () => getJob(jobId as number),
     enabled: jobId !== undefined,
-    initialData: jobId === initialJob?.id ? initialJob : undefined,
+    // Not seeded from `initialJob`: that's a summary now, without result_json or
+    // log, which is exactly what this panel displays (run-comparison-plan.md §2.2).
     refetchInterval: (query) => (query.state.data?.status === 'running' ? 3000 : false),
   })
 

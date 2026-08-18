@@ -67,26 +67,23 @@
 }
 .kt-error { color: var(--kt-rubric); font-size: var(--kt-size-small); }
 
-/* ============ Merged transcript rows (merge-and-search-plan.md §3.2) ============ */
-/* Binary speaker accent: green = host (the system's primary ink), gold = anyone
-   else (its secondary/"you are here" role). Identity is carried by the chip's
-   text, not by a colour per speaker — the palette has two inks and --kt-rubric
-   is licensed for `failed` alone. Deliberately a thin inline-start border, not
-   .kt-row[aria-current]'s wash + edge bar: a row can be "host" and "playing
-   now" at once, so the two treatments have to stay distinguishable. */
-.kt-row--host { border-inline-start: 3px solid var(--kt-green); }
-.kt-row--other { border-inline-start: 3px solid var(--kt-gold); }
-.kt-row--host, .kt-row--other { padding-inline-start: var(--kt-space-3); }
-
-/* Speaker chip, shown only on the row where the speaker changes. The raw
-   pyannote label lives in its title attribute (hover), not in the line. */
+/* ============ Speaker chips (run-comparison-plan.md §4.4) ============ */
+/* One channel per meaning, because a row can carry four states at once — playing,
+   host-spoken, holding changed words, holding the *current* change:
+     row inline-start edge -> playback only (.kt-row[aria-current], base.css)
+     the chip              -> speaker
+     word background       -> diff / search marks
+   This replaces the earlier speaker accent bar (merge-and-search-plan.md §3.2),
+   which sat in exactly the same three pixels as the playing row's edge bar. The
+   chip already names the speaker at every speaker change, so colouring it loses
+   nothing. --kt-rubric stays licensed for `failed` alone.
+   The raw pyannote label lives in the chip's title attribute (hover). */
 .kt-chip--speaker { margin-inline-end: var(--kt-space-2); cursor: help; }
-
-/* Merged vs. raw-pair switch — the filled button is the active view, so it
-   reuses .kt-btn/.kt-btn--secondary rather than needing a new treatment. */
-.kt-view-switch {
-  display: flex; align-items: center; gap: var(--kt-space-2);
-  margin-bottom: calc(-1 * var(--kt-space-2));
+.kt-chip--host { color: var(--kt-green); }
+.kt-chip--other { color: var(--kt-gold-ink); border-color: var(--kt-gold); background: var(--kt-gold-soft); }
+.kt-chip--reference {
+  margin-inline-start: var(--kt-space-2); font-size: var(--kt-size-small);
+  color: var(--kt-gold-ink); border-color: var(--kt-gold);
 }
 
 /* ============ Transcript search (merge-and-search-plan.md §4.3) ============ */
@@ -104,14 +101,28 @@
 .kt-search .kt-btn:disabled { opacity: 0.45; cursor: default; }
 .kt-search-count { flex: 0 0 auto; white-space: nowrap; }
 
-/* A match and the playing row can be the same row, so the current match is
-   marked by weight + a gold rule rather than by background alone — .kt-gold-wash
-   is already the active row's own background. */
-.kt-hit { background: var(--kt-gold-wash); border-radius: 2px; }
-.kt-hit--current {
-  background: var(--kt-gold-avatar); font-weight: 600;
-  box-shadow: inset 0 -2px 0 var(--kt-gold-ink);
+/* Search marks are an underline and diff marks are a wash, so a word that is both
+   — searched for *and* transcribed differently by this run — reads as both rather
+   than one hiding the other (MarkedText composes their classes). */
+.kt-hit { box-shadow: inset 0 -2px 0 var(--kt-gold); }
+.kt-hit--current { box-shadow: inset 0 -3px 0 var(--kt-gold-ink); font-weight: 600; }
+
+/* ============ Run comparison (run-comparison-plan.md §4) ============ */
+.kt-diff { background: var(--kt-gold-wash); border-radius: 2px; }
+.kt-diff--current { background: var(--kt-gold-avatar); font-weight: 600; }
+
+/* Columns scroll horizontally rather than squeezing: four transcripts on a narrow
+   window are unreadable at any width the flexbox would pick. */
+.kt-columns {
+  display: flex; gap: var(--kt-space-4); align-items: flex-start;
+  overflow-x: auto; padding-bottom: var(--kt-space-2);
 }
+.kt-column { flex: 1 0 22rem; min-width: 22rem; }
+.kt-column h3 { display: flex; align-items: center; gap: var(--kt-space-2); }
+
+.kt-diff-summary { display: flex; flex-wrap: wrap; gap: var(--kt-space-4); }
+.kt-params-diff { margin-top: var(--kt-space-3); font-size: var(--kt-size-small); }
+.kt-params-diff ul { margin: var(--kt-space-1) 0 0; padding-inline-start: var(--kt-space-4); }
 
 /* ============ Nav ============ */
 .kt-admin-nav { display: flex; gap: var(--kt-space-4); }

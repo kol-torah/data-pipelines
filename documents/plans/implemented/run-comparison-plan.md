@@ -1,6 +1,9 @@
 # Plan: side-by-side run comparison on the lesson page
 
-**Status:** Planned — not yet implemented.
+**Status: implemented.** All three phases are built, type-checked, tested, and driven in
+a browser against lesson 2213's six existing transcribe runs. §10 records what changed on
+contact with the code. Kept here for historical context only; `documents/admin-lab.md`
+§4.10 is the durable reference and stays up to date as the code evolves.
 **Code to touch:** new `frontend/src/lib/transcriptDiff.ts` (+ tests), new
 `frontend/src/components/{RunPicker,RunComparison}.tsx`; touches
 `frontend/src/components/{TimedList,HighlightedText,LessonResults}.tsx`,
@@ -323,3 +326,57 @@ but the punctuation clearly changed" is otherwise a bug report waiting to happen
   exists to inform, before 45 GPU-hours are spent.
 - `documents/design.md` §8.2 (the lab's stated purpose), §3 and §9 (transcription
   configuration, still untuned).
+
+
+---
+
+## 10. What changed during implementation
+
+### 10.1 `HighlightedText` became `MarkedText`, and marks compose
+
+The plan said search hits and diff marks would share one renderer. They can't share it by
+*replacing* each other: a word can be both searched-for and transcribed differently by
+this run, and whichever mark rendered last would have hidden the other. `MarkedText` now
+splits the text at every mark boundary and gives each piece the classes of every mark
+covering it, so the two treatments stack. Search accordingly moved from a background wash
+to an underline, leaving backgrounds to mean "differs from the reference".
+
+### 10.2 Group numbering had to become global
+
+Each pairwise diff numbers its groups from zero. With three or four columns that made
+"the current difference" ambiguous — group 2 of column B is not group 2 of column C. The
+flattened, time-ordered difference list is now the source of truth and every mark carries
+its index into *that*. The reference column also shows the marks from **every** compared
+run, not just the first, which the original sketch got wrong.
+
+### 10.3 `useFlushSync: false` on the virtualizer
+
+Two synced columns mean one column's effect scrolls another, and
+`@tanstack/react-virtual`'s scroll path calls `flushSync`, which React refuses from
+inside a lifecycle method — a console error on every sync, in a view whose whole job is
+to be trusted. Deferring the call by a frame did not silence it; the library's own
+`useFlushSync: false` option does, at the cost of a possible frame of unfilled rows
+during a fast scroll, which `overscan: 8` already covers. Single-column pages never hit
+this, which is why it appeared only now.
+
+### 10.4 The job panels lost their seeded `initialData`
+
+With `result_json` out of the list payload, seeding each panel's per-job query from the
+list row would have fed it a summary where it expects a full row — including the log and
+result it renders. The panels now fetch their own row, one request each. Relatedly,
+`staleMergeSources` reads the source ids from `params` rather than `result_json`, where
+they were available all along.
+
+### 10.5 Verified
+
+- `pytest` 15, `vitest` 32 (13 new for the diff engine, including offsets slicing back to
+  the original text, differently-chunked segments, and punctuation-only differences
+  reading as identical); `pyright`, `tsc -b`, `oxlint` clean.
+- In the browser on lesson 2213: two runs differing in `beam_size` and `initial_prompt`
+  report 3 differences and surface a real one — `הגעלה` transcribed as `הגאלה`; ▼ lands
+  both columns on the same moment; scrolling either column drags the other without
+  oscillation; four columns render with per-column change percentages; a fifth passed in
+  the URL is trimmed; `diarize=none` drops the chips and leaves the diff intact; no
+  console errors.
+- **Not verified by me:** whether the differences it surfaces are the ones that matter
+  for judging a prompt — that is the reading exercise this view exists to make possible.

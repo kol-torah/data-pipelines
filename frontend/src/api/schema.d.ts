@@ -182,7 +182,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Lesson Jobs */
+        /**
+         * List Lesson Jobs
+         * @description Without result_json — see LabJobSummary. Fetch a run's results via GET /jobs/{id}.
+         */
         get: operations["list_lesson_jobs_api_lab_lessons__lesson_id__jobs_get"];
         put?: never;
         post?: never;
@@ -220,6 +223,33 @@ export interface paths {
         get: operations["get_job_api_lab_jobs__job_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/merge-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge Preview
+         * @description Assign speakers from one diarization to each of several transcripts, without
+         *     writing anything (run-comparison-plan.md §2.1).
+         *
+         *     Same code path as MergeJob — assign_speakers()/summarize_speakers() from
+         *     lab/merge.py — so a preview and a persisted merge can never disagree; the only
+         *     difference is whether the answer is recorded. The merge *job* stays the way to
+         *     produce an artifact with params, git SHA, and provenance; this is a view, and
+         *     looking at a page shouldn't leave rows behind.
+         */
+        post: operations["merge_preview_api_lab_merge_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -264,6 +294,12 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AssignmentRule
+         * @description How a transcript segment picks its speaker among the turns it touches.
+         * @enum {string}
+         */
+        AssignmentRule: "max_overlap" | "midpoint" | "start";
         /**
          * CacheStatus
          * @description Not the same enumeration as db.status.LessonStatus (admin-lab-plan.md §0.2) —
@@ -342,6 +378,49 @@ export interface components {
             git_dirty: boolean;
         };
         /**
+         * LabJobSummary
+         * @description List-shaped job row: everything except the result blob.
+         *
+         *     A lesson routinely accumulates many runs (six on lesson 2213 already, and
+         *     batches will make that ordinary), so the list endpoint shipping every
+         *     transcript — ~100 KB each — is waste that grows with use. The comparison view
+         *     fetches the handful of runs it actually displays via GET /jobs/{id}.
+         *     Deliberately a separate model rather than result_json turning optional on
+         *     LabJobRead: a field that is always null in one context and never in another is
+         *     a worse contract than two named shapes.
+         */
+        LabJobSummary: {
+            /** Id */
+            id: number;
+            /** Lesson Id */
+            lesson_id: number;
+            /** Job Type */
+            job_type: string;
+            /** Job Version */
+            job_version: string;
+            /** Status */
+            status: string;
+            /** Pid */
+            pid: number | null;
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+            /** Model Id */
+            model_id: string | null;
+            /** Has Result */
+            has_result: boolean;
+            /** Error */
+            error: string | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Ended At */
+            ended_at: string | null;
+        };
+        /**
          * LabLessonRead
          * @description Built explicitly (not from_attributes) — series_name_he/en and
          *     rabbi_name_he/en are joined, and cache_status is computed against
@@ -406,6 +485,51 @@ export interface components {
          * @enum {string}
          */
         LessonStatus: "discovered" | "downloaded" | "stored";
+        /** MergeParams */
+        MergeParams: {
+            /** Transcribe Job Id */
+            transcribe_job_id: number;
+            /** Diarize Job Id */
+            diarize_job_id: number;
+            /** @default max_overlap */
+            assignment: components["schemas"]["AssignmentRule"];
+        };
+        /**
+         * MergePreviewRequest
+         * @description Speaker-tag several transcripts against one diarization, for display only —
+         *     see routers/jobs.py's merge_preview and run-comparison-plan.md §2.1.
+         */
+        MergePreviewRequest: {
+            /** Diarize Job Id */
+            diarize_job_id: number;
+            /** Transcribe Job Ids */
+            transcribe_job_ids: number[];
+        };
+        /** MergeResult */
+        MergeResult: {
+            /** Segments */
+            segments: components["schemas"]["MergedSegment"][];
+            /** Speakers */
+            speakers: components["schemas"]["SpeakerSummary"][];
+            params: components["schemas"]["MergeParams"];
+            /** Source Job Ids */
+            source_job_ids: {
+                [key: string]: number;
+            };
+            /** Elapsed S */
+            elapsed_s: number;
+        };
+        /** MergedSegment */
+        MergedSegment: {
+            /** Start Ms */
+            start_ms: number;
+            /** End Ms */
+            end_ms: number;
+            /** Text */
+            text: string;
+            /** Speaker */
+            speaker: string | null;
+        };
         /**
          * RabbiRead
          * @description Built explicitly (not from_attributes) — series_count is a query-side
@@ -491,6 +615,27 @@ export interface components {
             description_he?: string | null;
             /** Description En */
             description_en?: string | null;
+        };
+        /**
+         * SpeakerRole
+         * @enum {string}
+         */
+        SpeakerRole: "host" | "other";
+        /**
+         * SpeakerSummary
+         * @description One per distinct diarization label — the label → role mapping the UI needs,
+         *     computed once rather than re-derived per row.
+         */
+        SpeakerSummary: {
+            /** Label */
+            label: string;
+            role: components["schemas"]["SpeakerRole"];
+            /** Index */
+            index: number | null;
+            /** Total Ms */
+            total_ms: number;
+            /** First Start Ms */
+            first_start_ms: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -996,7 +1141,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LabJobRead"][];
+                    "application/json": components["schemas"]["LabJobSummary"][];
                 };
             };
             /** @description Validation Error */
@@ -1061,6 +1206,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LabJobRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    merge_preview_api_lab_merge_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeResult"][];
                 };
             };
             /** @description Validation Error */

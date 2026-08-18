@@ -9,6 +9,13 @@ export interface PlaybackContextValue {
   currentMs: number
   durationMs: number
   isPlaying: boolean
+  /** Where the columns are looking, when nobody is playing — see TimedList's
+   *  scroll sync (run-comparison-plan.md §4.2). Null until something publishes one. */
+  anchorMs: number | null
+  /** Which column published `anchorMs`. A column ignores its own anchors, which is
+   *  what stops two synced columns from chasing each other. */
+  anchorSource: string | null
+  setAnchor: (ms: number, source: string) => void
   play: () => void
   pause: () => void
   seek: (ms: number) => void
@@ -23,6 +30,7 @@ export function PlaybackProvider({ src, children }: { src: string; children: Rea
   const [currentMs, setCurrentMs] = useState(0)
   const [durationMs, setDurationMs] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [anchor, setAnchorState] = useState<{ ms: number; source: string } | null>(null)
 
   useEffect(() => {
     const audio = audioRef.current
@@ -55,6 +63,9 @@ export function PlaybackProvider({ src, children }: { src: string; children: Rea
     currentMs,
     durationMs,
     isPlaying,
+    anchorMs: anchor?.ms ?? null,
+    anchorSource: anchor?.source ?? null,
+    setAnchor: (ms, source) => setAnchorState({ ms, source }),
     play: () => void audioRef.current?.play(),
     pause: () => audioRef.current?.pause(),
     seek,

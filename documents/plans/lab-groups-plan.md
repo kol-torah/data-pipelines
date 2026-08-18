@@ -1,7 +1,7 @@
 # Plan: lesson groups in the lab — define a set once, run a job across it, read the results together
 
 **Status:** Planned — not yet implemented. **Sequenced after
-`documents/plans/run-comparison-plan.md`**, which builds the side-by-side transcript view
+`documents/plans/implemented/run-comparison-plan.md`**, which builds the side-by-side transcript view
 this plan's group page reuses. Comparison first, on one lesson, then groups.
 **Code to touch:** new `src/data_pipelines/lab/groups.py`, `src/data_pipelines/lab/run_batch.py`,
 `src/data_pipelines/admin_lab_api/routers/groups.py` + `schemas/groups.py`; new
@@ -40,7 +40,7 @@ means re-transcribing everything. Groups are how it gets tuned first.
 | Failure inside a batch | One lesson's failure is recorded and the batch **continues**; five consecutive failures abort it. Same rule as `audio-pipeline-plan.md` §0, for the same reason: a corrupt file must not end a 45-minute run, but five in a row means the GPU is gone. |
 | Results on the lesson page | **Nothing to build** — batch jobs are ordinary `lab_jobs` rows for that lesson, so they already appear there. They gain a badge naming the batch (§4.3) so it is clear which experiment produced them. |
 | Membership editing | **Playlist-shaped: add from either end, remove from either end.** A lesson page has "add to group…" (existing group or new); a lesson belongs to any number of groups; removal works from the lesson page and from the group page. Membership is a relation, not a property of either side — the same shape as a song and its playlists. |
-| Comparing runs within a group | **Reuse the lesson page's comparison view** (`run-comparison-plan.md`), rendered for the selected member. Nothing group-specific is designed for reading results until that view has been used in anger and found wanting — it may well be enough. |
+| Comparing runs within a group | **Reuse the lesson page's comparison view** (`implemented/run-comparison-plan.md`), rendered for the selected member. Nothing group-specific is designed for reading results until that view has been used in anger and found wanting — it may well be enough. |
 | Job types worth batching now | **Transcription.** Diarization batches are supported by the mechanism but not the priority: diarization is judged adequate for now, and the open question has moved to the LLM stage. |
 | Concurrency | **One batch at a time**, refused at the launch endpoint while another is live. Single-lesson jobs are not blocked — they are short and the operator launching one during a batch is making an informed choice, whereas two batches at once is always a mistake. |
 
@@ -209,7 +209,7 @@ Three stacked regions, in the order the work happens:
    batch is live it shows progress — "7 / 16 done, 1 failed" — polled with `refetchInterval`
    exactly as the single-job panel polls.
 3. **Results** — the lesson page's own results view for the selected member, including its
-   run comparison (`run-comparison-plan.md`), unchanged and unaware it is
+   run comparison (`implemented/run-comparison-plan.md`), unchanged and unaware it is
    inside a group. Keyed by lesson id so the audio element and playback position reset
    cleanly on switch. This is what makes "quickly switch lessons in the group" cheap to
    build: the results view already exists and already takes jobs as props.
@@ -236,7 +236,7 @@ additions:
 
 - **A group-level comparison view** — "batch A vs batch B across all 16 lessons at once",
   e.g. a matrix of per-lesson difference percentages. The per-lesson comparison
-  (`run-comparison-plan.md`) plus the batch selector may make this unnecessary; if it
+  (`implemented/run-comparison-plan.md`) plus the batch selector may make this unnecessary; if it
   doesn't, the diff engine built there computes exactly the numbers such a matrix would
   need, per lesson, and the batch schema here is what identifies the two sides.
 - **WER / ground truth** — still the honest way to compare prompts, still not built

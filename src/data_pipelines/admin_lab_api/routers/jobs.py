@@ -9,10 +9,23 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from data_pipelines.admin_lab_api.db import get_db
-from data_pipelines.admin_lab_api.schemas.jobs import JobCreate, LabJobRead
+from data_pipelines.admin_lab_api.schemas.jobs import (
+    JobCreate,
+    LabJobRead,
+    LabJobSummary,
+    MergePreviewRequest,
+)
 from data_pipelines.config import REPO_ROOT
 from data_pipelines.lab import jobs as lab_jobs
 from data_pipelines.lab.job_types import JOB_TYPES
+from data_pipelines.lab.merge import assign_speakers, summarize_speakers
+from data_pipelines.lab.models import (
+    DiarizationResult,
+    MergedSegment,
+    MergeParams,
+    MergeResult,
+    TranscriptionResult,
+)
 
 router = APIRouter(prefix="/api/lab", tags=["lab-jobs"])
 
@@ -20,8 +33,25 @@ DbSession = Annotated[Session, Depends(get_db)]
 
 
 @router.get("/lessons/{lesson_id}/jobs")
-def list_lesson_jobs(lesson_id: int, db: DbSession) -> list[LabJobRead]:
-    return [LabJobRead.model_validate(row) for row in lab_jobs.list_for_lesson(db, lesson_id)]
+def list_lesson_jobs(lesson_id: int, db: DbSession) -> list[LabJobSummary]:
+    """Without result_json — see LabJobSummary. Fetch a run's results via GET /jobs/{id}."""
+    return [
+        LabJobSummary(
+            id=row.id,
+            lesson_id=row.lesson_id,
+            job_type=row.job_type,
+            job_version=row.job_version,
+            status=row.status,
+            pid=row.pid,
+            params=row.params,
+            model_id=row.model_id,
+            has_result=row.result_json is not None,
+            error=row.error,
+            started_at=row.started_at,
+            ended_at=row.ended_at,
+        )
+        for row in lab_jobs.list_for_lesson(db, lesson_id)
+    ]
 
 
 @router.post("/jobs", status_code=201)
@@ -82,3 +112,54 @@ def get_job(job_id: int, db: DbSession) -> LabJobRead:
     if row.status == "running" and not lab_jobs.is_alive(row):
         lab_jobs.mark_failed(db, row, error="process appears to have died (pid no longer running)")
     return LabJobRead.model_validate(row)
+
+
+@router.post("/merge-preview")
+def merge_preview(body: MergePreviewRequest, db: DbSession) -> list[MergeResult]:
+    """Assign speakers from one diarization to each of several transcripts, without
+    writing anything (run-comparison-plan.md §2.1).
+
+    Same code path as MergeJob — assign_speakers()/summarize_speakers() from
+    lab/merge.py — so a preview and a persisted merge can never disagree; the only
+    difference is whether the answer is recorded. The merge *job* stays the way to
+    produce an artifact with params, git SHA, and provenance; this is a view, and
+    looking at a page shouldn't leave rows behind.
+    """
+    diarize_row = lab_jobs.get(db, body.diarize_job_id)
+    if diarize_row is None or diarize_row.job_type != "diarize":
+        raise HTTPException(status_code=422, detail=f"no diarize job {body.diarize_job_id}")
+    if diarize_row.status != "done" or diarize_row.result_json is None:
+        raise HTTPException(status_code=422, detail=f"diarize job {diarize_row.id} is not done")
+    diarization = DiarizationResult.model_validate(diarize_row.result_json)
+    speakers = summarize_speakers(diarization.turns)
+
+    previews: list[MergeResult] = []
+    for transcribe_job_id in body.transcribe_job_ids:
+        row = lab_jobs.get(db, transcribe_job_id)
+        if row is None or row.job_type != "transcribe":
+            raise HTTPException(status_code=422, detail=f"no transcribe job {transcribe_job_id}")
+        if row.lesson_id != diarize_row.lesson_id:
+            raise HTTPException(
+                status_code=422,
+                detail=f"job {transcribe_job_id} belongs to lesson {row.lesson_id}, "
+                f"not {diarize_row.lesson_id}",
+            )
+        if row.status != "done" or row.result_json is None:
+            raise HTTPException(status_code=422, detail=f"transcribe job {row.id} is not done")
+
+        transcription = TranscriptionResult.model_validate(row.result_json)
+        params = MergeParams(transcribe_job_id=transcribe_job_id, diarize_job_id=diarize_row.id)
+        labels = assign_speakers(transcription.segments, diarization.turns, params.assignment)
+        previews.append(
+            MergeResult(
+                segments=[
+                    MergedSegment(start_ms=s.start_ms, end_ms=s.end_ms, text=s.text, speaker=label)
+                    for s, label in zip(transcription.segments, labels, strict=True)
+                ],
+                speakers=speakers,
+                params=params,
+                source_job_ids=params.source_job_ids(),
+                elapsed_s=0.0,
+            )
+        )
+    return previews

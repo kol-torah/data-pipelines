@@ -15,6 +15,35 @@ class JobCreate(BaseModel):
     params: dict[str, Any]
 
 
+class LabJobSummary(BaseModel):
+    """List-shaped job row: everything except the result blob.
+
+    A lesson routinely accumulates many runs (six on lesson 2213 already, and
+    batches will make that ordinary), so the list endpoint shipping every
+    transcript — ~100 KB each — is waste that grows with use. The comparison view
+    fetches the handful of runs it actually displays via GET /jobs/{id}.
+    Deliberately a separate model rather than result_json turning optional on
+    LabJobRead: a field that is always null in one context and never in another is
+    a worse contract than two named shapes."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    lesson_id: int
+    job_type: str
+    job_version: str
+    status: str
+    pid: int | None
+    # dict[str, Any]: opaque per job_type at the DB layer (AL §5.2) — kept in the
+    # summary because the run picker renders params to tell runs apart.
+    params: dict[str, Any]
+    model_id: str | None
+    has_result: bool
+    error: str | None
+    started_at: datetime
+    ended_at: datetime | None
+
+
 class LabJobRead(BaseModel):
     """Maps 1:1 onto LabJobRow's columns, so from_attributes is enough here
     (contrast schemas/catalogue.py's Read models, which need joined/computed
@@ -42,3 +71,11 @@ class LabJobRead(BaseModel):
     ended_at: datetime | None
     git_sha: str
     git_dirty: bool
+
+
+class MergePreviewRequest(BaseModel):
+    """Speaker-tag several transcripts against one diarization, for display only —
+    see routers/jobs.py's merge_preview and run-comparison-plan.md §2.1."""
+
+    diarize_job_id: int
+    transcribe_job_ids: list[int]

@@ -19,6 +19,7 @@ export function TimedList<T extends TimedItem>({
   emptyLabel,
   rowClassName,
   focusIndex,
+  syncId,
 }: {
   items: T[]
   renderRow: (item: T, index: number) => ReactNode
@@ -27,9 +28,16 @@ export function TimedList<T extends TimedItem>({
   rowClassName?: (item: T, index: number) => string | undefined
   // Scroll this row into view when it changes — search jumps (§4.3).
   focusIndex?: number
+  // Identity for timestamp scroll sync across comparison columns. Omit for a
+  // standalone list (run-comparison-plan.md §4.2).
+  syncId?: string
 }) {
-  const { currentMs, seek, isPlaying } = usePlayback()
+  const { currentMs, seek, isPlaying, anchorMs, anchorSource, setAnchor } = usePlayback()
   const parentRef = useRef<HTMLDivElement>(null)
+  // Scrolls this component performs itself must not be mistaken for the operator
+  // scrolling, or two synced columns publish anchors at each other forever.
+  const programmaticUntil = useRef(0)
+  const scrollFrame = useRef(0)
 
   const activeIndex = items.findIndex((item) => currentMs >= item.start_ms && currentMs < item.end_ms)
 
@@ -38,7 +46,19 @@ export function TimedList<T extends TimedItem>({
     getScrollElement: () => parentRef.current,
     estimateSize: () => 64,
     overscan: 8,
+    // Without this, every scroll-driven update runs through flushSync, which
+    // React rejects when the scroll was started from an effect — two synced
+    // columns (run-comparison-plan.md §4.2) do exactly that, one scrolling the
+    // other. The option exists for this; the cost is that a fast scroll may show
+    // a frame of unfilled rows, which `overscan` above already covers.
+    useFlushSync: false,
   })
+
+  const scrollToIndex = (index: number, align: 'auto' | 'center' | 'start') => {
+    programmaticUntil.current = performance.now() + 250
+    virtualizer.scrollToIndex(index, { align })
+  }
+
 
   // Only follow the playhead while audio is actually playing. Following while
   // paused fights the operator: @tanstack/react-virtual re-attempts a
@@ -48,17 +68,40 @@ export function TimedList<T extends TimedItem>({
   // (merge-and-search-plan.md §4.3).
   useEffect(() => {
     if (isPlaying && activeIndex >= 0) {
-      virtualizer.scrollToIndex(activeIndex, { align: 'auto' })
+      scrollToIndex(activeIndex, 'auto')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIndex, isPlaying])
 
   useEffect(() => {
     if (focusIndex !== undefined && focusIndex >= 0) {
-      virtualizer.scrollToIndex(focusIndex, { align: 'center' })
+      scrollToIndex(focusIndex, 'center')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusIndex])
+
+  // Follow an anchor somebody else published: scroll to whichever row holds that
+  // moment of the lesson. Columns have different row counts, so syncing by row
+  // index would drift immediately — the timeline is the only thing they share.
+  useEffect(() => {
+    if (syncId === undefined || anchorMs === null || anchorSource === syncId) return
+    if (isPlaying) return // playback already drives every column
+    let index = items.findIndex((item) => item.start_ms > anchorMs) - 1
+    if (index < 0) index = items.length > 0 && anchorMs >= items[0].start_ms ? items.length - 1 : 0
+    scrollToIndex(index, 'start')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchorMs, anchorSource])
+
+  const handleScroll = () => {
+    if (syncId === undefined || isPlaying) return
+    if (performance.now() < programmaticUntil.current) return
+    if (scrollFrame.current) return
+    scrollFrame.current = requestAnimationFrame(() => {
+      scrollFrame.current = 0
+      const top = virtualizer.getVirtualItems()[0]
+      if (top !== undefined) setAnchor(items[top.index].start_ms, syncId)
+    })
+  }
 
   if (items.length === 0) {
     return <p className="kt-meta">{emptyLabel}</p>
@@ -75,6 +118,7 @@ export function TimedList<T extends TimedItem>({
     // edge, so the bleed lands in this new padding buffer instead of getting cut.
     <div
       ref={parentRef}
+      onScroll={handleScroll}
       className="kt-list"
       style={{
         height: 480,

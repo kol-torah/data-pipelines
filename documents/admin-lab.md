@@ -172,26 +172,18 @@ see §4.3. Unaffected by the React/backend split in §1.2: the backend API proce
   a launch button — this is what makes a page refresh safe (§4.3).
 - **Live status.** Polls `lab_jobs` (§5.1) on a short interval; per-job status, timing,
   and (once done) results appear without a full page reload.
-- **Results view.** Clickable, virtualized lists sharing one continuously-playing audio
-  player — clicking a row seeks playback to that timestamp instantly, with the
-  currently-playing segment highlighted as playback moves past it. **What is listed
-  depends on whether a merge job (§5.3) has run for that lesson:**
-  - **With a merge:** one list, not two. Each transcript segment carries the speaker
-    the merge assigned it — a chip reading `מנחה` or `שואל N` (shown where the speaker
-    changes) and a thin green/gold accent per row (host / anyone else). The raw
-    `SPEAKER_00`-style label is the chip's **tooltip**, not text in the line: printed on
-    every chip it was noise, but it's still one hover away when an assignment looks
-    wrong.
-  - **Without one:** transcript segments and diarization turns side by side, unmerged.
-    Turns show raw labels only; *which* label is the host is a merge-job output (§4.7),
-    not a display-time guess.
-
-  **A switch above the lists moves between the two views even when a merge exists**, and
-  it earns its place: a wrong speaker on a row can come either from the merge assigning
-  it badly or from diarization drawing the turn boundary in the wrong place, and the raw
-  pair is the only view that tells those apart. Diarization quality is still unknown
-  (§8), so the ability to check the merged view against its own inputs matters more than
-  the tidiness of always showing one list.
+- **Results view — one to four transcription runs side by side.** Clickable, virtualized
+  columns sharing one continuously-playing audio player: clicking a row in any column
+  seeks playback instantly, and the currently-playing segment highlights as playback
+  moves past it. A run picker chooses which runs to show (§4.10); with a single run
+  selected this is an ordinary transcript view, which is the common case.
+- **Speaker tagging as a lens, not a comparison.** One diarization run is selected —
+  newest by default, `ללא` to turn it off — and applied to *every* transcript column, so
+  each segment carries a chip reading `מנחה` or `שואל N`, with the raw `SPEAKER_00`-style
+  label as the chip's tooltip. Because all columns share one diarization, the same
+  speaker is the same colour in every column by construction. Two diarizations are never
+  compared against each other; the merge job (§5.3) is still what decides host-vs-asker
+  (§4.7), and the display path for it computes on demand without recording a run.
 - **Transcript search.** Find a phrase inside the lesson on screen — matches are marked
   inline, with a counter and next/previous that scroll the list to each occurrence
   (§4.9). Within one lesson only; there is no catalogue-wide search.
@@ -209,11 +201,10 @@ see §4.3. Unaffected by the React/backend split in §1.2: the backend API proce
 - ~~The merge job type (§5.3).~~ **Built** — see §5.3; the results view above describes
   what it changed.
 - **Catalogue-wide transcript search** — §4.9's search covers one lesson at a time.
-- **Run comparison view** — pick two `lab_jobs` rows for a lesson, diff params and
-  segments side by side. Needed, not optional: `design.md` §8.2's whole stated reason
-  for the lab existing is "which of these configurations is best across these lessons,"
-  which is a comparison question by definition. Sequenced after v1 only because it needs
-  a second run of the same job type to exist before there's anything to compare.
+- ~~**Run comparison view**~~ — **built**, see §4.10. `design.md` §8.2's whole stated
+  reason for the lab existing is "which of these configurations is best across these
+  lessons," which is a comparison question by definition; it was sequenced after v1 only
+  because a second run of the same job type had to exist first.
 - Ground-truth transcripts / WER measurement.
 - Live log streaming while a job runs (§4.5).
 - The UI-prototyping gallery's actual content (§1) — its existence shapes the stack
@@ -531,6 +522,50 @@ is still found and marked in both rows. Deliberately *not* normalized: final-for
 and prefixes (`ו`/`ה`/`ב`/`ל`/`ש`) — plain substring matching already finds `שולחן ערוך`
 inside `בשולחן ערוך`, and folding prefixes would only add false positives. There is no
 stemming and nothing semantic: `שנה` does not find `שנים`, by design.
+
+### 4.10 Comparing runs: words, not segments; the timeline, not the diff
+
+Two transcription runs of one lesson chunk it differently — a different
+`initial_prompt` or beam size moves segment boundaries — so comparing segment to
+segment reports re-chunking as though it were a change. The comparison is therefore
+**word-level**, over the normalized form of §4.9 (so re-punctuation reads as identical),
+with the marks painted back onto the original text through the same offset mapping the
+search uses. `frontend/src/lib/transcriptDiff.ts` holds it; the diff itself is jsdiff's
+`diffArrays` over token arrays.
+
+**Alignment is the timeline, not the diff.** Each run is laid out by its own timestamps
+in its own column, and the columns are scroll-synced *on time*: whichever column the
+operator is scrolling publishes the moment at the top of its viewport, and the others
+scroll to whichever row holds that moment. Row-index sync would drift immediately —
+the columns have different row counts. Two mechanics make this work rather than
+oscillate:
+
+- **The publisher is identified.** A column ignores anchors it published itself, so two
+  synced columns don't chase each other.
+- **Programmatic scrolls are fenced off.** Any scroll this component performs (playback
+  following, a search jump, a difference jump, an anchor it is following) suppresses
+  anchor publishing briefly, so it is not mistaken for the operator scrolling.
+
+While audio is playing, playback drives every column and manual anchoring is off — the
+sync that matters is the one already in §4.8.
+
+**Navigation is by difference, not by scrolling.** Most of a transcript is identical
+between prompt variants, so the view counts the disagreements and steps between them
+(▲/▼), each step publishing that moment as the anchor so every column lands together.
+Each column's diff numbers its groups from zero, so they are renumbered globally — with
+three columns, "the current difference" has to mean one thing on screen.
+
+**One channel per meaning**, because a row can be playing, host-spoken, holding changed
+words, and holding the current change all at once: the row's inline-start edge is
+playback, the chip is the speaker, and word backgrounds are diffs (with search hits as
+an underline, so a word can be both). This replaced an earlier speaker accent bar that
+occupied the same pixels as the playing row's edge bar.
+
+**Nothing is written.** The diff is recomputed on every render from results already
+fetched, and speaker tagging for the columns comes from `POST /api/lab/merge-preview`,
+which runs `merge.py`'s own functions and returns without inserting a row — looking at a
+page should not leave `lab_jobs` rows behind. The merge *job* remains the way to produce
+a recorded artifact with params and a git SHA.
 
 ---
 

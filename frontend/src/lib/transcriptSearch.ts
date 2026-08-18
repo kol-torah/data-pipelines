@@ -6,6 +6,13 @@
 // which is what "a little fuzziness" means here: it finds "מרן השולחן ערוך"
 // inside "מרן, השולחן־ערוך" and matches רמב"ם against רמב״ם, and deliberately
 // does not match שנה against שנים (no stemming, nothing semantic).
+//
+// The character-level rules live in hebrewText.ts, shared with the run comparison's
+// diff — both need the same answer to "is this the same word".
+
+import { isDropped, isWordChar, normalize } from './hebrewText'
+
+export { normalize }
 
 /** Offsets into one segment's ORIGINAL (un-normalized) text. */
 export interface MatchRange {
@@ -27,54 +34,6 @@ export interface SearchIndex {
   segmentOf: Int32Array
   /** Per normalized char: its offset in that segment's original text. */
   offsetOf: Int32Array
-}
-
-const isCombiningMark = (code: number) =>
-  // Niqqud and te'amim, minus the marks that read as punctuation below:
-  // 05BE maqaf, 05C0 paseq, 05C3 sof pasuq, 05C6 nun hafukha.
-  (code >= 0x0591 && code <= 0x05bd) ||
-  code === 0x05bf ||
-  code === 0x05c1 ||
-  code === 0x05c2 ||
-  code === 0x05c4 ||
-  code === 0x05c5 ||
-  code === 0x05c7
-
-const isBidiControl = (code: number) =>
-  // Whisper's Hebrew output really does carry these (U+202B RLE is all over the
-  // transcripts in this repo's DB) — invisible, and they would silently break
-  // every match that spans one.
-  code === 0x200e ||
-  code === 0x200f ||
-  (code >= 0x202a && code <= 0x202e) ||
-  (code >= 0x2066 && code <= 0x2069) ||
-  code === 0x200b ||
-  code === 0xfeff
-
-// Dropped outright rather than turned into a separator: gershayim sit *inside* a
-// word (רמב״ם), so replacing them with a space would split it in two.
-const DROPPED_QUOTES = new Set(["'", '"', '`', '׳', '״', '‘', '’', '“', '”'])
-
-const isKept = (ch: string, code: number) =>
-  (code >= 0x05d0 && code <= 0x05ea) || // Hebrew letters
-  (code >= 0x0030 && code <= 0x0039) || // digits
-  /[a-z]/.test(ch)
-
-/** The normalized form of a string — the same transformation applied to the
- *  haystack and to the query, which is what makes the fuzziness symmetric. */
-export function normalize(text: string): string {
-  let out = ''
-  for (const raw of text) {
-    const ch = raw.toLowerCase()
-    const code = ch.codePointAt(0) ?? 0
-    if (isCombiningMark(code) || isBidiControl(code) || DROPPED_QUOTES.has(ch)) continue
-    if (isKept(ch, code)) {
-      out += ch
-    } else if (out.length > 0 && !out.endsWith(' ')) {
-      out += ' '
-    }
-  }
-  return out.trimEnd()
 }
 
 export function buildSearchIndex(texts: string[]): SearchIndex {
@@ -99,8 +58,8 @@ export function buildSearchIndex(texts: string[]): SearchIndex {
       const ch = raw.toLowerCase()
       const code = ch.codePointAt(0) ?? 0
       const width = raw.length
-      if (!(isCombiningMark(code) || isBidiControl(code) || DROPPED_QUOTES.has(ch))) {
-        if (isKept(ch, code)) {
+      if (!isDropped(ch, code)) {
+        if (isWordChar(ch, code)) {
           push(ch, segmentIndex, offset)
         } else if (haystack.length > 0 && !haystack.endsWith(' ')) {
           push(' ', segmentIndex, offset)
