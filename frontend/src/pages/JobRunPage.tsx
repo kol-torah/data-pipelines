@@ -4,7 +4,8 @@ import { useParams, useSearchParams } from 'react-router-dom'
 import { createJob, getJob, listLabLessons, listLessonJobs, mergePreview } from '../api/lab'
 import type { LabJob, LabJobSummary } from '../api/lab'
 import { JobStatusBadge } from '../components/JobStatusBadge'
-import { RunPicker, MAX_COMPARED_RUNS } from '../components/RunPicker'
+import { RunPicker } from '../components/RunPicker'
+import { MAX_COMPARED_RUNS } from '../lib/runParams'
 import { RunComparison, segmentsFor } from '../components/RunComparison'
 import type { RunColumn } from '../components/RunComparison'
 
@@ -129,9 +130,6 @@ export function JobRunPage() {
     return ids.filter((id) => doneTranscribes.some((j) => j.id === id)).slice(0, MAX_COMPARED_RUNS)
   }, [runsParam, doneTranscribes])
 
-  const refParam = Number(searchParams.get('ref'))
-  const referenceId = selectedIds.includes(refParam) ? refParam : selectedIds[0]
-
   const diarizeParam = searchParams.get('diarize')
   const diarizeId =
     diarizeParam === 'none'
@@ -140,10 +138,10 @@ export function JobRunPage() {
         ? Number(diarizeParam)
         : doneDiarizes[0]?.id
 
-  const setSelection = (next: { runs: number[]; ref: number | undefined; diarize: number | undefined }) => {
+  const setSelection = (next: { runs: number[]; diarize: number | undefined }) => {
     const params = new URLSearchParams(searchParams)
     params.set('runs', next.runs.join(','))
-    if (next.ref !== undefined) params.set('ref', String(next.ref))
+    params.delete('ref') // no longer a concept — marking is multi-way
     params.set('diarize', next.diarize === undefined ? 'none' : String(next.diarize))
     setSearchParams(params, { replace: true })
   }
@@ -174,7 +172,6 @@ export function JobRunPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [loadedRuns.map((job) => job.id).join(','), previews],
   )
-  const referenceIndex = Math.max(0, columns.findIndex((column) => column.job.id === referenceId))
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--kt-space-5)' }}>
@@ -217,19 +214,13 @@ export function JobRunPage() {
           transcribeRuns={doneTranscribes}
           diarizeRuns={doneDiarizes}
           selectedIds={selectedIds}
-          referenceId={referenceId}
           diarizeId={diarizeId}
           onChange={setSelection}
         />
       )}
 
       {lesson && columns.length > 0 && (
-        <RunComparison
-          lessonId={id}
-          columns={columns}
-          referenceIndex={referenceIndex}
-          speakers={previews?.[0]?.speakers ?? []}
-        />
+        <RunComparison lessonId={id} columns={columns} speakers={previews?.[0]?.speakers ?? []} />
       )}
     </div>
   )

@@ -380,3 +380,23 @@ they were available all along.
   console errors.
 - **Not verified by me:** whether the differences it surfaces are the ones that matter
   for judging a prompt — that is the reading exercise this view exists to make possible.
+
+### 10.6 The first sync implementation was off by the overscan
+
+Reported in use: scrolling one pane moved the other only when a row left the viewport, and
+the panes settled ~23 seconds apart (one at 01:05, the other at 00:42). Two causes, both in
+the same place:
+
+- The leader published `getVirtualItems()[0]` — the first *rendered* row, which with
+  `overscan: 8` sits eight rows **above** the viewport. So it announced a moment well
+  earlier than the one on screen, and every follower scrolled that much too far back.
+- The follower aligned the containing row's *top* to its own top edge, quantising the
+  result to that row's start — up to a full segment of extra error, and no movement at all
+  until the anchor crossed into a different row.
+
+Both now work in time at the top edge: the leader takes the row the edge actually cuts
+through and interpolates where inside it the edge falls; the follower maps that moment to
+its own row and scrolls to `rowOffset + fraction × rowSize`. Measured across four scroll
+positions in both directions, the panes agree to within a second — the residual is the two
+runs' segment boundaries differing, not sync error. §4.2's warning that this was "the one
+genuinely fiddly part and the place to expect a second iteration" was accurate.

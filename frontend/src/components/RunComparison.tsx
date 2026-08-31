@@ -8,8 +8,9 @@ import { PlaybackProvider, usePlayback } from '../contexts/PlaybackContext'
 import { TimedList } from './TimedList'
 import { TranscriptSearchBar } from './TranscriptSearchBar'
 import { useTranscriptSearch } from '../lib/useTranscriptSearch'
-import { diffRuns, marksBySegment, tokenizeRun } from '../lib/transcriptDiff'
-import type { SegmentMark, TimedText } from '../lib/transcriptDiff'
+import { diffRunsMulti, marksBySegment, tokenizeRun } from '../lib/transcriptDiff'
+import { paramsSummary } from '../lib/runParams'
+import type { DiffGroup, SegmentMark, TimedText } from '../lib/transcriptDiff'
 import { formatTime } from '../lib/formatTime'
 
 export interface RunColumn {
@@ -40,85 +41,51 @@ function thinTicks(positionsMs: number[], max: number): number[] {
 export function RunComparison({
   lessonId,
   columns,
-  referenceIndex,
   speakers,
 }: {
   lessonId: number
   columns: RunColumn[]
-  referenceIndex: number
   speakers: SpeakerSummary[]
 }) {
-  const reference = columns[referenceIndex]
+  // Search and the tick track read the first column; disagreement marking reads
+  // all of them equally (see diffRunsMulti — no run is a reference).
+  const first = columns[0]
 
   const speakerByLabel = useMemo(
     () => new Map(speakers.map((speaker) => [speaker.label, speaker])),
     [speakers],
   )
 
-  // One tokenization per column, one diff per non-reference column. ~12k tokens
-  // per run for a 95-minute lesson; Myers is fast when the runs mostly agree,
-  // which prompt variants do (run-comparison-plan.md §3.2).
-  const diffs = useMemo(() => {
-    if (columns.length < 2) return null
-    const tokenized = columns.map((column) => tokenizeRun(column.segments))
-    return columns.map((_, index) =>
-      index === referenceIndex ? null : diffRuns(tokenized[referenceIndex], tokenized[index]),
-    )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [columns, referenceIndex])
+  // One multi-way comparison, not N pairwise ones: a word is marked in *every*
+  // run wherever the runs disagree, including the runs that agree with each
+  // other. ~12k tokens per run for a 95-minute lesson; fast when the runs mostly
+  // agree, which they do.
+  const diff = useMemo(
+    () => (columns.length < 2 ? null : diffRunsMulti(columns.map((column) => tokenizeRun(column.segments)))),
+    [columns],
+  )
 
-  // Every disagreement in the lesson, in time order — "next place where anything
-  // differs", across all compared columns at once. Each diff numbers its own
-  // groups from zero, so they're renumbered globally here: with three columns the
-  // marks in each have to point at the same shared list for "current" to mean one
-  // thing on screen.
-  const { differences, globalIndexOf } = useMemo(() => {
-    if (diffs === null) return { differences: [], globalIndexOf: new Map<string, number>() }
-    const flat = diffs
-      .flatMap((diff, columnIndex) =>
-        (diff?.groups ?? []).map((group, groupIndex) => ({
-          timeMs: group.referenceMs,
-          columnIndex,
-          groupIndex,
-        })),
-      )
-      .sort((a, b) => a.timeMs - b.timeMs)
-    return {
-      differences: flat,
-      globalIndexOf: new Map(flat.map((d, i) => [`${d.columnIndex}:${d.groupIndex}`, i])),
-    }
-  }, [diffs])
+  const marksByColumn = useMemo(
+    () => columns.map((_, index) => marksBySegment(diff?.marksPerRun[index] ?? [])),
+    [columns, diff],
+  )
 
-  // The reference column shows what *every* compared run disagrees with, not just
-  // the first one.
-  const marksByColumn = useMemo(() => {
-    const globalise = (marks: { segmentIndex: number; start: number; end: number; groupIndex: number }[],
-                       columnIndex: number) =>
-      marks.map((mark) => ({
-        ...mark,
-        groupIndex: globalIndexOf.get(`${columnIndex}:${mark.groupIndex}`) ?? -1,
-      }))
-    return columns.map((_, index) => {
-      if (diffs === null) return marksBySegment([])
-      if (index === referenceIndex) {
-        return marksBySegment(
-          diffs.flatMap((diff, columnIndex) =>
-            diff === null ? [] : globalise(diff.referenceMarks, columnIndex),
-          ),
-        )
-      }
-      return marksBySegment(globalise(diffs[index]?.otherMarks ?? [], index))
-    })
-  }, [columns, diffs, referenceIndex, globalIndexOf])
+  const differences = useMemo(() => diff?.groups ?? [], [diff])
+
+  // The moment under the pointer, shared across columns: hovering a row marks
+  // the same stretch of lesson in the others. Segment boundaries differ between
+  // runs, so one hovered row can light up two rows elsewhere — which is itself
+  // worth seeing, since it shows how the runs chunked the same speech.
+  const [hoveredSpan, setHoveredSpan] = useState<{ start_ms: number; end_ms: number } | null>(null)
 
   const [currentDifference, setCurrentDifference] = useState(0)
   useEffect(() => setCurrentDifference(0), [differences.length])
 
-  const search = useTranscriptSearch(useMemo(() => reference.segments.map((s) => s.text), [reference]))
+  const search = useTranscriptSearch(useMemo(() => first.segments.map((s) => s.text), [first]))
 
   const tickPositions = useMemo(
-    () => thinTicks(reference.segments.map((segment) => segment.start_ms), 80),
-    [reference],
+    () => thinTicks(first.segments.map((segment) => segment.start_ms), 80),
+    [first],
   )
 
   return (
@@ -139,22 +106,15 @@ export function RunComparison({
             differences={differences}
           />
         )}
-        {diffs !== null && (
+        {diff !== null && (
           <div className="kt-diff-summary">
-            {columns.map((column, index) => {
-              const diff = diffs[index]
-              return (
-                <span key={column.job.id} className="kt-meta">
-                  <span className="kt-time">#{column.job.id}</span>
-                  {index === referenceIndex
-                    ? ' — ייחוס'
-                    : diff
-                      ? ` — ${(diff.changedFraction * 100).toFixed(1)}% מילים שונות`
-                      : ''}
-                  {` · ${column.segments.length} קטעים`}
-                </span>
-              )
-            })}
+            {columns.map((column, index) => (
+              <span key={column.job.id} className="kt-meta">
+                <span className="kt-time">#{column.job.id}</span>
+                {` — ${((diff.changedPerRun[index] / Math.max(1, diff.tokensPerRun[index])) * 100).toFixed(1)}% מילים במחלוקת`}
+                {` · ${column.segments.length} קטעים`}
+              </span>
+            ))}
           </div>
         )}
       </div>
@@ -164,11 +124,13 @@ export function RunComparison({
           <TranscriptColumn
             key={column.job.id}
             column={column}
-            isReference={index === referenceIndex}
             marks={marksByColumn[index]}
             currentGroup={differences.length > 0 ? currentDifference : undefined}
-            search={index === referenceIndex ? search : undefined}
+            search={index === 0 ? search : undefined}
             speakerByLabel={speakerByLabel}
+            hoveredSpan={hoveredSpan}
+            onHoverSpan={setHoveredSpan}
+            showModel={new Set(columns.map((c) => c.job.model_id)).size > 1}
           />
         ))}
       </div>
@@ -187,7 +149,7 @@ function DifferenceNav({
   count: number
   current: number
   onStep: (index: number) => void
-  differences: { timeMs: number }[]
+  differences: DiffGroup[]
 }) {
   const { setAnchor } = usePlayback()
 
@@ -217,30 +179,56 @@ function DifferenceNav({
 
 function TranscriptColumn({
   column,
-  isReference,
   marks,
   currentGroup,
   search,
   speakerByLabel,
+  hoveredSpan,
+  onHoverSpan,
+  showModel,
 }: {
   column: RunColumn
-  isReference: boolean
   marks: Map<number, SegmentMark[]>
   currentGroup: number | undefined
   search: ReturnType<typeof useTranscriptSearch> | undefined
   speakerByLabel: Map<string, SpeakerSummary>
+  hoveredSpan: { start_ms: number; end_ms: number } | null
+  onHoverSpan: (span: { start_ms: number; end_ms: number } | null) => void
+  // Only when the columns disagree about it — otherwise it's a long identical
+  // string wrapping mid-token in every header.
+  showModel: boolean
 }) {
   return (
     <div className="kt-card kt-column">
       <h3>
         <span className="kt-time">#{column.job.id}</span>
-        {isReference && <span className="kt-chip kt-chip--reference">ייחוס</span>}
       </h3>
+      {/* What this run actually was — otherwise two columns of Hebrew are
+          indistinguishable without scrolling back up to the picker. */}
+      <p className="kt-meta kt-column-params">
+        {paramsSummary(column.job.params)}
+        {showModel && (
+          <>
+            {' · '}
+            <span className="kt-time">{column.job.model_id ?? '—'}</span>
+          </>
+        )}
+      </p>
       <TimedList
         items={column.segments}
         emptyLabel="אין קטעי תמלול."
         syncId={`run-${column.job.id}`}
         focusIndex={search?.focusIndex}
+        onHoverItem={(item) =>
+          onHoverSpan(item === null ? null : { start_ms: item.start_ms, end_ms: item.end_ms })
+        }
+        rowClassName={(segment) =>
+          hoveredSpan !== null &&
+          segment.start_ms < hoveredSpan.end_ms &&
+          segment.end_ms > hoveredSpan.start_ms
+            ? 'kt-row--peer'
+            : undefined
+        }
         renderRow={(segment, index) => {
           const summary = segment.speaker ? speakerByLabel.get(segment.speaker) : undefined
           const previous = column.segments[index - 1]

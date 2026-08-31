@@ -133,3 +133,10 @@
 dialog.kt-dialog { border: none; border-radius: var(--kt-radius-lg); padding: 0; max-width: 420px; }
 dialog.kt-dialog::backdrop { background: rgb(0 0 0 / 0.35); }
 dialog.kt-dialog .kt-card { border-radius: var(--kt-radius-lg); display: flex; flex-direction: column; gap: var(--kt-space-4); }
+
+/* Hovering a row in one comparison column marks the same stretch of lesson in the
+   others (run-comparison-plan.md §4.2's sync, applied to the pointer rather than
+   the scrollbar). Same colour as base.css's own .kt-row:hover, so the hovered row
+   and its counterparts read as one thing. */
+.kt-row--peer { background: var(--kt-gold-soft); }
+.kt-column-params { margin-top: calc(-1 * var(--kt-space-2)); }
