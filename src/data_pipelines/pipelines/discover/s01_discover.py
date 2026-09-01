@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from data_pipelines.adapters.base import SeriesAdapter
 from data_pipelines.adapters.registry import get_adapter
+from data_pipelines.adapters.yt_dlp_cli import warn_if_outdated
 from data_pipelines.config import get_settings
 from data_pipelines.db import Lesson, Series
 from data_pipelines.pipelines.discover.series import series_to_run
@@ -73,6 +74,7 @@ def main() -> None:
     parser.add_argument("series_slug", nargs="?", default=None)
     args = parser.parse_args()
 
+    warn_if_outdated()
     engine = create_engine(get_settings().database_url())
     with Session(engine, expire_on_commit=False) as session:
         discover_all(session, series_to_run(session, args.series_slug))

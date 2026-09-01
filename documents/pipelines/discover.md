@@ -1,7 +1,7 @@
 # Discover pipeline
 
 **Status:** Implemented — stages 1-3
-**Last updated:** 2026-08-11
+**Last updated:** 2026-09-01
 **Code:** `src/data_pipelines/pipelines/discover/`
 
 ---
@@ -190,6 +190,46 @@ uv run python -m data_pipelines.pipelines.discover.s02_download               # 
 uv run python -m data_pipelines.pipelines.discover.s02_download <series-slug> # one series
 uv run python -m data_pipelines.pipelines.discover.s02_download --lesson-id 42 # one lesson
 ```
+
+### 4.3 The yt-dlp version check
+
+YouTube changes its extraction and anti-bot behaviour on its own schedule, and
+`yt-dlp` follows with a fix. An install that has drifted a few weeks behind stops
+being able to download at all — typically as a blanket `HTTP 403: Forbidden` on
+*every* video, including ones that downloaded fine the month before. That failure
+reads like a problem with the videos rather than with the tool, and because only
+newly-discovered lessons are ever downloaded (§4.1), it can look narrower than it is:
+in August 2026 it presented as "the Butbul Halacha Yomit clips from the last two
+weeks fail", when in fact every download was failing and Halacha Yomit was simply the
+only series with new material.
+
+So `warn_if_outdated()` (`adapters/yt_dlp_cli.py`) runs at the top of `run.py`, and
+of stage 1's and stage 2's `main()`. It asks the yt-dlp *binary* for its version
+(what actually runs, not what package metadata records) and compares it against
+PyPI's `info.version`.
+
+A few properties worth keeping:
+
+- **It never fails a run.** An unreachable PyPI, or a missing binary, prints a line
+  and carries on — a version check is not a reason to stop.
+- **It compares against latest *stable*, and doesn't nag about nightlies.** yt-dlp
+  publishes nightlies to the same PyPI project as PEP 440 prereleases (`.devN`),
+  which `info.version` excludes by definition. Someone deliberately running a nightly
+  is *ahead* of latest-stable and is left alone.
+- **Version comparison is component-wise, not textual.** The CLI zero-pads
+  (`2026.08.19`) where PyPI does not (`2026.8.19`), so a string compare would report
+  a fully current install as outdated. See `tests/test_yt_dlp_cli.py`.
+- **One PyPI round trip per process** (`check_version` is `lru_cache`d), with a short
+  timeout — `run.py` calls it via three entry points but only pays once.
+
+The fix when it fires:
+
+```bash
+uv lock --upgrade-package yt-dlp && uv sync
+```
+
+Note that the version floor in `pyproject.toml` is bumped along with the lock when a
+version is found broken, so a later re-lock can't silently slide back onto it.
 
 ---
 

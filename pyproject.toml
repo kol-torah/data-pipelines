@@ -20,7 +20,7 @@ dependencies = [
     "torch>=2.13.0",
     "transformers>=5.15.0",
     "uvicorn>=0.52.1",
-    "yt-dlp>=2026.7.4",
+    "yt-dlp>=2026.8.19",
     "yt-dlp-ejs>=0.8.0",
 ]
 

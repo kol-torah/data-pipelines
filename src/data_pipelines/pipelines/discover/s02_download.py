@@ -43,6 +43,7 @@ from sqlalchemy.orm import Session
 
 from data_pipelines.adapters.base import SeriesAdapter
 from data_pipelines.adapters.registry import get_adapter
+from data_pipelines.adapters.yt_dlp_cli import warn_if_outdated
 from data_pipelines.config import get_settings
 from data_pipelines.db import AudioFile, Lesson, LessonDownload, Series
 from data_pipelines.pipelines.discover.series import series_to_run
@@ -221,6 +222,7 @@ def main() -> None:
     group.add_argument("--lesson-id", type=int, default=None)
     args = parser.parse_args()
 
+    warn_if_outdated()
     cache_root = get_settings().local_cache_dir
     engine = create_engine(get_settings().database_url())
     jobs: list[DownloadJob] = []
