@@ -216,31 +216,93 @@ def rekey(session: Session, *, dry_run: bool, delete_old: bool) -> None:
 
     print(f"copied {copied}, verified {verified}, local cache files moved {cached}")
 
-    if delete_old:
-        stale = [m for m in moves if m.old_key != m.new_key]
-        for move in stale:
-            client.delete_object(Bucket=bucket, Key=move.old_key)
-        print(f"deleted {len(stale)} old-key objects")
-    else:
-        print(
-            "old-key objects left in place — delete them with --delete-old once the "
-            "rebuild is verified (catalogue-redesign-plan.md §10, step 7)"
+    print(
+        "old-key objects left in place — remove them with --delete-unreferenced once "
+        "the rebuild is verified (catalogue-redesign-plan.md §10, step 7)"
+    )
+
+
+def delete_unreferenced(session: Session, *, dry_run: bool) -> None:
+    """Delete every object in the bucket that no `audio_files` row points at.
+
+    Step 7. Deliberately **not** "delete the old keys": by the time this runs, the rows
+    that once named them hold the new keys, so there is nothing left to derive an old
+    key from. Asking the bucket what it holds and the database what it wants is the only
+    definition that stays true afterwards — and it also sweeps up the copy of
+    InDyHd2bKCA that rediscovery left unclaimed, which a key-shape rule would have kept
+    forever.
+
+    This is the point the migration stops being reversible, so it checks first that
+    every referenced object actually exists. A missing one means the bucket is not in
+    the state the database believes, and nothing should be deleted until that is
+    understood."""
+    settings = get_settings()
+    client = _client()
+    bucket = settings.s3_bucket_name
+
+    referenced = set(session.scalars(select(AudioFile.storage_key)))
+    if not referenced:
+        raise SystemExit(
+            "audio_files is empty — refusing to delete anything, since every object in "
+            "the bucket would count as unreferenced."
         )
+
+    in_bucket: set[str] = set()
+    paginator = client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket):
+        for obj in page.get("Contents", []):
+            in_bucket.add(obj["Key"])
+
+    missing = referenced - in_bucket
+    if missing:
+        raise SystemExit(
+            f"{len(missing)} referenced objects are not in the bucket "
+            f"(e.g. {sorted(missing)[0]!r}). Nothing deleted — the database and the "
+            f"bucket disagree, and that has to be understood before anything is dropped."
+        )
+
+    stale = sorted(in_bucket - referenced)
+    total_kept = len(referenced)
+    print(
+        f"bucket holds {len(in_bucket)} objects; {total_kept} are referenced and "
+        f"{len(stale)} are not"
+    )
+    for key in stale[:5]:
+        print(f"  would delete {key}")
+    if len(stale) > 5:
+        print(f"  ... and {len(stale) - 5} more")
+    if dry_run:
+        print("dry run — nothing deleted")
+        return
+    if not stale:
+        return
+
+    for i in range(0, len(stale), 1000):
+        batch = stale[i : i + 1000]
+        client.delete_objects(
+            Bucket=bucket, Delete={"Objects": [{"Key": key} for key in batch]}
+        )
+        print(f"  deleted {min(i + 1000, len(stale))}/{len(stale)} …")
+    print(f"deleted {len(stale)} unreferenced objects; {total_kept} remain")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true", help="show the plan, change nothing")
     parser.add_argument(
-        "--delete-old",
+        "--delete-unreferenced",
         action="store_true",
-        help="delete the old-key objects; only after the rebuild is verified (step 7)",
+        help="delete every bucket object no audio_files row points at; "
+        "only after the rebuild is verified (step 7)",
     )
     args = parser.parse_args()
 
     engine = create_engine(get_settings().database_url())
     with Session(engine) as session:
-        rekey(session, dry_run=args.dry_run, delete_old=args.delete_old)
+        if args.delete_unreferenced:
+            delete_unreferenced(session, dry_run=args.dry_run)
+        else:
+            rekey(session, dry_run=args.dry_run, delete_old=False)
 
 
 if __name__ == "__main__":
