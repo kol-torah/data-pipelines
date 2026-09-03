@@ -4,7 +4,7 @@
 **Survey it depends on:** `documents/pipelines/kolel-channels.md` — every number here comes
 from it.
 **Changes:** `documents/database-schema.md` §2, §3.1, §3.2, §3.3, §4.1, §4.2, §4.4, §5;
-`documents/admin-lab.md` (the catalogue screens, §7.5).
+`documents/admin-lab.md` (the catalogue screens §7.5, the lesson picker §7.6).
 
 ---
 
@@ -543,6 +543,34 @@ The lab's own job history is truncated in migration step 5 and lesson ids change
 step 6 verification, not during it.** The pipeline must be provably correct before the UI
 that inspects it is also in flux.
 
+### 7.6 The lab
+
+Separate from §7.5 and separately scheduled, because it is the tool you actually run
+experiments with.
+
+**`src/data_pipelines/lab/` itself is untouched** — transcription, diarization and merge
+work on a lesson's audio and never look at a speaker or a series. Verified: zero
+references to `rabbi`, `adapter_key` or `lesson_type` in that package.
+
+What breaks is the **lesson picker** that feeds it (`admin_lab_api/routers/lessons.py`,
+`schemas/lessons.py`, `frontend/src/pages/LessonPickerPage.tsx`):
+
+| What it does today | What it has to become |
+| --- | --- |
+| Filters `?rabbi_id=` via `Series.rabbi_id` | Filter by speaker through `lesson_speakers` — a join, not a column |
+| Shows `rabbi_name_he` / `rabbi_name_en` from `series.rabbi` | Read the lesson's own speakers: **zero, one, or several** |
+| Filters `?lesson_type=` on a free string | Filter on `lesson_types.slug` |
+
+This is a behaviour change, not just a port, and it is an improvement worth stating: a
+lesson co-taught by two speakers appears under both, and a lesson whose speaker differs
+from its series' usual teacher is no longer silently mis-attributed. The picker's
+`lesson_ids` mode and its cache-status logic are unaffected.
+
+**Job history is lost**, by your call: `lab.lab_jobs` is truncated in §10 step 5 because
+its `lesson_id` FK points at rows that are about to be recreated with new ids. The lab
+comes back empty and the 35 existing job rows do not survive. Nothing else in the lab
+depends on them.
+
 ---
 
 ## 8. Deliberately deferred
@@ -620,10 +648,15 @@ catalogue must be settled before anything is copied; and the re-key needs the **
 7. **Verify, then clean up.** Only once the criteria below pass, delete the old-key S3
    objects. Until that deletion the migration is fully reversible: the bucket still holds
    every original object and step 1 still holds the row that named it.
-8. **Admin website** (§7.5) — after verification, not during. The API and pages break on
-   step 2's schema change, so the lab is down between steps 2 and 8; that is acceptable for a
-   single-operator tool but should be a deliberate choice, not a surprise.
-9. **Then** build the new parsers and channels (§7.1–§7.4).
+8. **The lab picker** (§7.6) — before the catalogue admin, because it is the tool in daily
+   use. `src/data_pipelines/lab/` needs no changes; only the picker API and its page.
+9. **Admin website** (§7.5) — the catalogue screens, which are only needed once new
+   channels are being curated.
+10. **Then** build the new parsers and channels (§7.1–§7.4).
+
+The API and pages break on step 2's schema change, so the lab is unusable between steps 2
+and 8. That is acceptable for a single-operator tool but should be a deliberate choice
+rather than a surprise.
 
 ### Acceptance criteria for step 6
 
