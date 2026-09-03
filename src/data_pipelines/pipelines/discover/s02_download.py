@@ -17,7 +17,7 @@ stage.
 
 Downloads run concurrently (one asyncio task per lesson); each adapter is responsible
 for throttling itself against its own source's rate limits (see
-YouTubePlaylistAdapter's semaphore) — this stage doesn't know or care what those are.
+YouTubeSourceAdapter's semaphore) — this stage doesn't know or care what those are.
 Each lesson_downloads row is written as soon as that lesson's download finishes, in
 completion order, not batched until the whole job list is done: a run interrupted
 partway through (e.g. Ctrl+C) must not lose the record of lessons already downloaded,
@@ -46,7 +46,6 @@ from data_pipelines.adapters.registry import get_source_adapter
 from data_pipelines.adapters.yt_dlp_cli import warn_if_outdated
 from data_pipelines.config import get_settings
 from data_pipelines.db import AudioFile, Lesson, LessonDownload, Series
-from data_pipelines.pipelines.discover.preconditions import require_rekeyed_audio
 from data_pipelines.pipelines.discover.series import series_to_run
 from data_pipelines.pipelines.discover.storage import list_existing_audio
 from data_pipelines.pipelines.discover.text import pluralize
@@ -62,7 +61,7 @@ class DownloadJob:
     lesson: Lesson
 
 # Downloads happen strictly one at a time, deliberately — not just inside a given
-# adapter (e.g. YouTubePlaylistAdapter's own semaphore), but across this whole
+# adapter (e.g. YouTubeSourceAdapter's own semaphore), but across this whole
 # pipeline stage. asyncio.gather still schedules every job up front, so without this
 # cap all of them would sit "in flight" simultaneously (and show a live progress row
 # each) even while blocked on an adapter's own throttling underneath — which both
@@ -74,9 +73,6 @@ def adapter_for(lesson: Lesson) -> SourceAdapter | None:
     """How a lesson is fetched is a property of where it came from, not of the series it
     was filed under — two series on one channel download identically, and one series
     could in principle draw on two sources."""
-    if lesson.source is None:
-        print(f"{lesson.external_id}: lesson has no source, skipping")
-        return None
     adapter = get_source_adapter(lesson.source)
     if adapter is None:
         print(
@@ -244,7 +240,6 @@ def main() -> None:
     engine = create_engine(get_settings().database_url())
     jobs: list[DownloadJob] = []
     with Session(engine, expire_on_commit=False) as session:
-        require_rekeyed_audio(session)
         if args.lesson_id is not None:
             lesson = session.get(Lesson, args.lesson_id)
             if lesson is None:

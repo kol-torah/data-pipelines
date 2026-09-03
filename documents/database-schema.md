@@ -1,7 +1,7 @@
 # Kol Torah — Database Schema: Discover / Download / Store
 
-**Status:** Draft for review
-**Last updated:** 2026-08-11
+**Status:** Current — reflects the catalogue redesign
+**Last updated:** 2026-09-03
 
 ---
 
@@ -22,88 +22,196 @@ actually look like. See §5 for what that means for this slice in the meantime.
 
 ```mermaid
 erDiagram
-    RABBIS ||--o{ SERIES : has
-    SERIES ||--o{ LESSONS : has
-    LESSONS ||--o| LESSON_DOWNLOADS : "awaiting store"
-    LESSONS ||--o| AUDIO_FILES : has
-    LESSONS ||--o{ LESSON_DUPLICATES : "is a duplicate (lesson_id)"
-    LESSONS ||--o{ LESSON_DUPLICATES : "is canonical for (duplicate_of_id)"
+    SOURCES  ||--o{ INGEST_RULES : "feeds via"
+    SERIES   ||--o{ INGEST_RULES : "filled by"
+    SOURCES  ||--o{ LESSONS : originates
+    SERIES   ||--o{ LESSONS : groups
+    SPEAKERS ||--o{ SPEAKER_ALIASES : "known as"
+    SPEAKERS ||--o{ LESSON_SPEAKERS : teaches
+    LESSONS  ||--o{ LESSON_SPEAKERS : "taught by"
+    LESSON_TYPES ||--o{ SERIES : classifies
+    LESSON_TYPES ||--o{ LESSONS : classifies
+    LESSONS  ||--o| LESSON_DOWNLOADS : "awaiting store"
+    LESSONS  ||--o| AUDIO_FILES : has
+    LESSONS  ||--o{ LESSON_DUPLICATES : "is a duplicate (lesson_id)"
+    LESSONS  ||--o{ LESSON_DUPLICATES : "is canonical for (duplicate_of_id)"
 ```
 
-A rabbi has many series; each series is worked by exactly one adapter (a Python class,
-not a database concept — see §4.1) and produces many lessons; each lesson has at most
-one audio file, and may be flagged as a duplicate of another lesson. A lesson also has
-at most one `lesson_downloads` row, but only transiently — it exists solely in the
-window between a lesson being downloaded and being stored (see §3.4a).
+Three things this shape says, each of which the previous one could not:
 
----
+- **A series has no speaker.** It is an editorial grouping — a thing to browse — and who
+  taught a lesson is a fact about the lesson (`lesson_speakers`, §3.5), which may be
+  nobody or two people. "Who teaches this series" is the `series_speakers` view (§4.6).
+- **A lesson belongs to a source**, and `(source_id, external_id)` is unique: one video is
+  one lesson however many rules claim it, so it downloads and transcribes once.
+- **Where lessons come from is data, not code.** A source is a channel or site we poll; an
+  ingest rule says how one series is filled from one source. A source feeds many series
+  (one kolel channel, five series); a series may draw on several of a source's playlists
+  (one per Hebrew year).
+
+Full rationale in `documents/plans/catalogue-redesign-plan.md`.
 
 ## 3. Tables
 
-### 3.1 `rabbis`
+### 3.1 `speakers`
 
-| Column       | Type          | Constraints        | Notes                          |
-| ------------ | ------------- | ------------------- | ------------------------------- |
-| `id`         | bigint        | PK                  |                                  |
-| `name_he`    | text          | not null             |                                  |
-| `name_en`    | text          | not null             |                                  |
-| `slug`       | text          | not null, unique     | used in storage keys (§4.2)     |
-| `created_at` | timestamptz   | not null, default now() |                              |
+| Column       | Type          | Constraints             | Notes |
+| ------------ | ------------- | ----------------------- | ----- |
+| `id`         | bigint        | PK                      |       |
+| `name_he`    | text          | not null                | carries the honorific — `הרב אהרון בוטבול` |
+| `name_en`    | text          | not null                | `Rabbi Aharon Butbul`, `Dr. Michael Abulafia` |
+| `slug`       | text          | not null, unique        | `r-` prefixed: `r-butbul`, `r-almog-levi` |
+| `created_at` | timestamptz   | not null, default now() |       |
 
-The root of the catalogue. Nothing pipeline-specific lives here yet — just enough to
-group series by who taught them and to give admin tooling something to list.
+Was `rabbis`. Renamed because the institutional channels also carry doctors, professors,
+a `הרבנית` and lay teachers (`documents/pipelines/kolel-channels.md` §2) — the old name
+could not hold them honestly. The honorific lives *in* the name, which is what keeps
+"most of these are rabbis" visible despite the table's name; the `r-` slug prefix is a
+namespace, not a claim about ordination.
 
-Both names are required, not one primary plus a later translation: rabbis and series are
-entered by hand (§5, admin interface), so whoever adds one is expected to supply both
-immediately. That's different from lesson titles below, which are scraped from the
-source and only ever arrive in Hebrew.
+Both names are required, not one primary plus a later translation: speakers and series
+are entered by hand (§5, admin interface), so whoever adds one supplies both immediately.
+That differs from lesson titles below, which are scraped and only ever arrive in Hebrew.
+
+### 3.1a `speaker_aliases`
+
+| Column       | Type   | Constraints          | Notes |
+| ------------ | ------ | -------------------- | ----- |
+| `name_he`    | text   | **PK**               | one spelling maps to exactly one speaker |
+| `speaker_id` | bigint | FK → `speakers.id`, not null, indexed | |
+
+The name itself is the primary key, not a surrogate: that is what guarantees a spelling
+can never resolve to two speakers. Matching on the **whole** name is also what keeps the
+substring traps out — `אבוטבול` contains `בוטבול`, `לוינשטיין` contains `לוי`, and both
+are different people (kolel-channels.md §3.2). `אהרן בוטבול` and `אהרון בוטבול` both map
+to `r-butbul`; `הרב אודי שורץ` and `הרב אודי שוורץ` are another such pair.
+
+Fixing a misattribution is an admin edit, not a code change — and because
+`lessons.speaker_raw` (§3.3) keeps what the source actually said, adding an alias
+re-resolves past lessons without re-scraping.
+
+### 3.1b `lesson_types`
+
+| Column       | Type   | Constraints      | Notes |
+| ------------ | ------ | ---------------- | ----- |
+| `id`         | bigint | PK               |       |
+| `slug`       | text   | not null, unique | `halacha`, `gemara`, `tanach`, … |
+| `name_he`    | text   | not null         |       |
+| `name_en`    | text   | not null         |       |
+| `sort_order` | bigint | not null, default 0 | so the UI isn't alphabetical by accident |
+
+Replaces the free string. A side table rather than a PG enum: adding a value is a row,
+not a migration, and the admin UI can list them. Vocabulary and rationale in §4.4.
+
+### 3.1c `sources`
+
+| Column        | Type        | Constraints             | Notes |
+| ------------- | ----------- | ----------------------- | ----- |
+| `id`          | bigint      | PK                      |       |
+| `slug`        | text        | not null, unique        | `butbul-radio`, `harav-org` |
+| `name`        | text        | not null                | display |
+| `platform`    | text        | not null                | `youtube` \| `http` — selects download mechanics |
+| `external_id` | text        | not null                | channel id, site root, Spreaker show id |
+| `parser_key`  | text        | not null                | which title parser this source needs |
+| `created_at`  | timestamptz | not null, default now() |       |
+
+Somewhere we poll — one row per channel or site, **not per series**. Owns the download
+mechanics and the title parser, and is the unit rate limiting and surveying work against.
+The six original series come from four sources, not one: Butbul has two separate channels
+(`UCYG1zMLW7s7QTwalxKOLmzw` for the radio shows, `UCS9moGQA0U4MqWzT98mIlGw` for the rest),
+plus harav.org and Spreaker.
+
+### 3.1d `ingest_rules`
+
+| Column               | Type    | Constraints             | Notes |
+| -------------------- | ------- | ----------------------- | ----- |
+| `id`                 | bigint  | PK                      |       |
+| `source_id`          | bigint  | FK → `sources.id`, not null, indexed | |
+| `series_id`          | bigint  | FK → `series.id`, not null, indexed  | |
+| `kind`               | text    | not null                | see below |
+| `config`             | jsonb   | not null, default `{}`  | validated per-kind by a Pydantic model |
+| `default_speaker_id` | bigint  | FK → `speakers.id`, nullable | when accepting the source *was* the attribution decision |
+| `priority`           | bigint  | not null, default 100   | lower wins a contested video |
+| `enabled`            | boolean | not null, default true  | import is selective by design |
+
+How a series gets filled. A series may have several rules; a source serves many.
+
+| `kind` | `config` | used by |
+| --- | --- | --- |
+| `youtube_playlist` | `{playlist_id}` | Halichot Olam, Sichat Hulin, Weekly Ashkelon |
+| `youtube_playlist_prefix` | `{title_prefix}` | Daily Halacha — one playlist per Hebrew year, resolved at runtime |
+| `title_match` | `{speakers: [slug], topic?}` | the multi-speaker kolel channels |
+| `whole_feed` | `{}` | Eliyahu (harav.org), Ariel (Spreaker) |
+
+`config` is `jsonb` because the shape genuinely differs per kind; the typing CLAUDE.md
+asks for comes from a per-kind Pydantic model with `extra="forbid"`, validated when the
+rule is loaded. That is a stronger guarantee than a wide table of mutually-exclusive
+nullable columns: a `playlist_id` left on a `whole_feed` rule after a copy-paste is an
+error, not a silently ignored key.
+
+`priority` is what makes "one video, one lesson" deterministic. `InDyHd2bKCA` sits in
+both Butbul radio playlists; Halichot Olam's rule is priority 100 and Sichat Hulin's 110,
+so it lands in the former and the latter reports it as already known.
 
 ### 3.2 `series`
 
-| Column         | Type        | Constraints            | Notes                                             |
-| -------------- | ----------- | ------------------------ | -------------------------------------------------- |
-| `id`           | bigint      | PK                        |                                                     |
-| `rabbi_id`     | bigint      | FK → `rabbis.id`, not null |                                                   |
-| `name_he`      | text        | not null                   |                                                     |
-| `name_en`      | text        | not null                   |                                                     |
-| `slug`         | text        | not null, unique           | used in storage keys (§4.2)                        |
-| `lesson_type`  | text        | not null                   | plain string for now — see §4.4                    |
-| `adapter_key`  | text        | not null                   | registry key resolving to a Python adapter class   |
-| `description_he` | text      | nullable                   |                                                     |
-| `description_en` | text      | nullable                   |                                                     |
-| `created_at`   | timestamptz | not null, default now()    |                                                     |
+| Column           | Type        | Constraints                      | Notes |
+| ---------------- | ----------- | -------------------------------- | ----- |
+| `id`             | bigint      | PK                               |       |
+| `name_he`        | text        | not null                         |       |
+| `name_en`        | text        | not null                         |       |
+| `slug`           | text        | not null, unique                 | used in storage keys (§4.2) |
+| `lesson_type_id` | bigint      | FK → `lesson_types.id`, not null | §4.4 |
+| `description_he` | text        | nullable                         |       |
+| `description_en` | text        | nullable                         |       |
+| `created_at`     | timestamptz | not null, default now()          |       |
 
-A series is one rabbi's recurring thing — a weekly *shiur*, a *halacha yomit* run, a
-radio show — and the unit an adapter is written against. `adapter_key` is a lookup
-string (e.g. `"butbul.halacha_yomit"`), not a foreign key to a database row: the
-adapter's actual behaviour (which playlists/feeds to pull, how to filter a mixed
-playlist down to the right videos) lives in that Python class, not in this table. See
-§4.1 for why, and what would change if that stops being true.
+A recurring thing — a weekly *shiur*, a *halacha yomit* run, a radio show — and the unit
+a listener browses.
+
+**It has no speaker and no adapter.** Both were removed, and each for its own reason:
+
+- `rabbi_id` was removed because a series' speakers are a fact derived from its lessons,
+  not a property of the series. A playlist can carry several speakers (32 of מכון מאיר's
+  168 are genuine anthologies), a lesson can be co-taught, and a series can exist with no
+  lessons at all — none of which a single FK can express. Use the `series_speakers` view
+  (§4.6).
+- `adapter_key` was removed because its three jobs split cleanly: `sources.platform`
+  decides how audio is fetched, `sources.parser_key` how titles are read, and
+  `ingest_rules` where the lessons are. See §4.1.
+
+A series always starts empty — created when a source is surveyed and accepted, populated
+at the next discovery run — so every screen and query must tolerate zero lessons.
 
 ### 3.3 `lessons`
 
-| Column          | Type        | Constraints                          | Notes                                                        |
-| --------------- | ----------- | --------------------------------------- | -------------------------------------------------------------- |
-| `id`            | bigint      | PK                                       |                                                                  |
-| `series_id`     | bigint      | FK → `series.id`, not null               |                                                                  |
-| `external_id`   | text        | not null                                 | platform-native id (e.g. YouTube video id)                     |
-| `url`           | text        | not null                                 |                                                                  |
-| `title_he`      | text        | not null                                 | scraped from the source (G1: lessons are almost always Hebrew) |
-| `title_en`      | text        | nullable                                 | filled in later by an AI translation stage — see §5             |
-| `description_he` | text       | nullable                                 | not every source provides one                                  |
-| `description_en` | text       | nullable                                 | filled in later by an AI translation stage — see §5             |
-| `lesson_type`   | text        | not null                                 | usually copied from `series.lesson_type`, overridable per lesson |
-| `published_at`  | timestamptz | nullable                                 | when the platform published it                                 |
-| `recorded_at`   | timestamptz | nullable                                 | actual event date, when known separately from `published_at`   |
-| `discovered_at` | timestamptz | not null, default now()                  | when the discover step first saw it                             |
+| Column           | Type        | Constraints                       | Notes |
+| ---------------- | ----------- | --------------------------------- | ----- |
+| `id`             | bigint      | PK                                |       |
+| `source_id`      | bigint      | FK → `sources.id`, not null, indexed | where it came from |
+| `series_id`      | bigint      | FK → `series.id`, not null, indexed  | which group it's in |
+| `external_id`    | text        | not null                          | the source's own id |
+| `url`            | text        | not null                          |       |
+| `title_he`       | text        | not null                          | parsed topic where the source allows it |
+| `title_en`       | text        | nullable                          | nothing populates this yet (§5) |
+| `description_he` | text        | nullable                          | usually the raw source title |
+| `description_en` | text        | nullable                          |       |
+| `speaker_raw`    | text        | nullable                          | what the source said, before any alias lookup |
+| `lesson_type_id` | bigint      | FK → `lesson_types.id`, nullable  | overrides the series' when set |
+| `published_at`   | timestamptz | nullable                          | when the source published it |
+| `recorded_at`    | timestamptz | nullable                          | parsed from the title where one carries a date |
+| `discovered_at`  | timestamptz | not null, default now()           |       |
 
-**Unique constraint on `(series_id, external_id)`.** This is what makes discovery
-idempotent: re-running an adapter over a playlist it has already scanned just re-derives
-rows it can skip inserting, rather than needing its own cursor or checkpoint.
+**Unique on `(source_id, external_id)`**, not `(series_id, external_id)`. One video is
+one lesson however many rules claim it, so it is downloaded and transcribed once. This
+was not hypothetical: under the old key, `InDyHd2bKCA` existed twice and had been
+downloaded and stored twice.
 
-`published_at` and `recorded_at` are both nullable and both optional independently —
-you described usually having a publish date and sometimes a separate, earlier recording
-date, so neither is guaranteed and they are not the same field.
+`speaker_raw` is kept **after** resolution, not discarded. It is what makes alias
+curation retroactive — add a `speaker_aliases` row and past lessons re-resolve without
+re-scraping the source — and it is the input to the admin's unknown-speaker queue. A
+lesson with a `speaker_raw` and no `lesson_speakers` row is precisely "we know who the
+source said, and we don't yet know who that is".
 
 ### 3.4 `audio_files`
 
@@ -155,7 +263,25 @@ glob.
 yet), but so a corrupted-after-the-fact file — modified or truncated after being
 staged — is at least visible on inspection as a size mismatch.
 
-### 3.5 `lesson_duplicates`
+### 3.5 `lesson_speakers`
+
+| Column       | Type   | Constraints                   | Notes |
+| ------------ | ------ | ----------------------------- | ----- |
+| `lesson_id`  | bigint | PK part, FK → `lessons.id`    |       |
+| `speaker_id` | bigint | PK part, FK → `speakers.id`   |       |
+| `position`   | bigint | not null, default 1           | display order |
+
+Who actually taught this lesson. **Zero rows means nobody was identified; two means
+co-taught** — `הרב יעקב מדן והרב אמנון בזק` accounts for 289 videos at Har Etzion, and
+neither case is expressible when the speaker hangs off the series.
+
+Resolution order when a lesson is discovered: the speaker named in the title, else the
+rule's `default_speaker_id`, else the speaker named in the description (which costs
+nothing — the API call that fetches `published_at` returns it anyway), else no row.
+
+No `ON DELETE CASCADE`, in keeping with the other child tables — see §3.4a.
+
+### 3.6 `lesson_duplicates`
 
 | Column            | Type        | Constraints                       | Notes                                        |
 | ----------------- | ----------- | ------------------------------------ | ----------------------------------------------- |
@@ -174,21 +300,26 @@ slice exists, but the table shape already accommodates it via `method` and `scor
 
 ## 4. Design decisions and rationale
 
-### 4.1 One adapter class per series, not shared config
+### 4.1 Source locations are data; parsing is code
 
-Series-level filtering (e.g. picking one weekly video out of a playlist that also
-contains unrelated content) is closer to arbitrary code than to a declarative filter a
-config schema could express cleanly. Rather than build a config DSL to avoid writing
-Python, each series gets a bespoke adapter class, keyed by `series.adapter_key`, with a
-base class per platform (e.g. `YouTubePlaylistAdapter`) providing shared mechanics —
-fetching, pagination, invoking `yt-dlp` — via inheritance. Series-specific source
-locations (playlist IDs, feed URLs) live as constants inside the adapter class, not in
-the database.
+This section used to argue for one adapter class per series, with playlist ids as class
+constants, and predicted its own replacement: *"expected to be refactored as more series
+are onboarded and patterns repeat — at which point moving source locations into a
+database table becomes worth its complexity."* Surveying four institutional channels
+(21,352 videos, ~100 candidate series on one of them) was that point.
 
-This is a starting point, expected to be refactored as more series are onboarded and
-patterns repeat — at which point moving source locations into a database table (so
-adding a playlist becomes an admin action instead of a code change) becomes worth its
-complexity. Nothing in this schema blocks that later move; it just isn't built now.
+What moved and what didn't:
+
+- **Locations became data.** `ingest_rules` (§3.1d) holds the playlist id, the title
+  prefix, the speaker list. Adding a series is now a catalogue row, not a Python class —
+  which is what makes a channel with a hundred series tractable at all.
+- **Parsing stayed code.** The original argument still holds for it: extracting an
+  occasion from a Butbul title, or a Hebrew date, is closer to arbitrary code than to
+  anything a config DSL should express. One parser per source (`sources.parser_key`),
+  dispatching per series where a source's series differ — Butbul's radio channel carries
+  two series whose titles share no structure at all.
+
+So "one parser per source" means one *module*, not one regex.
 
 ### 4.2 Storage key shared between bucket and local cache
 
@@ -217,9 +348,14 @@ completion signal for a specific handoff between two stages, populated only once
 deleted once consumed, not a long-lived flag anyone would expect to stay in sync with
 manual filesystem changes.
 
+**The speaker component was removed** when `series.rabbi_id` was (§3.2). Deriving one
+from a lesson's speakers is not available — a lesson may have none — and series slugs are
+globally unique, so it was decorative. The 2,207 existing objects were moved onto the new
+convention by `data_pipelines.one_off.rekey_storage`; nothing carries two conventions.
+
 ### 4.3 Bilingual names and descriptions, but not uniformly required
 
-`rabbis` and `series` get `name_he`/`name_en` as two **required** columns, because those
+`speakers` and `series` get `name_he`/`name_en` as two **required** columns, because those
 rows are hand-entered and both names are known at creation time. `series` also gets
 `description_he`/`description_en`, both **nullable** — unlike the name, a description is
 optional content even when hand-entered, so there's no reason to force an English one at
@@ -230,15 +366,38 @@ per design.md G1 — lessons are almost always Hebrew — while `description_he`
 nullable since not every source provides one) and `title_en`/`description_en`, both
 nullable and populated later by an LLM translation step that doesn't exist yet (§5).
 
-### 4.4 `lesson_type`, not `content_type`
+### 4.4 `lesson_type`: one axis, and a side table
 
-Named `lesson_type` (on both `series` and `lessons`) rather than `content_type`, since
-`content_type` is a term already used elsewhere. It's a plain text column rather than a
-Postgres enum for now — the four shapes design.md §2.2 describes (long single-topic,
-series, short single-topic, Q&A/radio) are a reasonable starting set, but locking them
-into an enum before more series are onboarded (e.g. before deciding where video clips
-fit) risks a migration to loosen it almost immediately. Tightening a text column into an
-enum later is a cheap migration once the real set of values is known.
+The name stays `lesson_type` rather than `content_type` — it describes the lesson, and
+"content" is the vaguer word.
+
+It became a **side table** (§3.1b) rather than a free string because the free string
+drifted, and it drifted for a specific reason: the three original values mixed three
+different axes. `Q&A` is a format, `Halacha Lesson` is a subject, `Short Lesson` is a
+length. Length is already in `audio_files.duration_s` and needs no type at all.
+
+The vocabulary is therefore **subject only**, derived from what the surveyed channels
+actually teach:
+
+| slug | `name_he` | `name_en` |
+| --- | --- | --- |
+| `halacha` | הלכה | Halacha |
+| `gemara` | גמרא | Talmud |
+| `tanach` | תנ"ך | Tanach |
+| `parasha` | פרשת שבוע | Weekly Parasha |
+| `mishna` | משנה | Mishna |
+| `musar` | מוסר | Musar |
+| `machshava` | מחשבה ואמונה | Jewish Thought |
+| `chasidut` | חסידות | Chasidut |
+| `qa` | שאלות ותשובות | Q&A |
+| `hadracha` | הדרכה ומשפחה | Guidance & Family |
+| `moed` | מועדים ואירועים | Occasions & Holidays |
+
+`qa` is deliberately a format among subjects: a Q&A show is a genuinely different kind of
+content, and splitting it by subject would be both wrong and useless. Named as the one
+exception rather than left as an inconsistency.
+
+Known gap: biography/history has no home yet — too small to justify a row.
 
 ### 4.5 Lesson status is derived from row presence, not stored
 
@@ -272,6 +431,34 @@ one that was never attempted, since failures aren't recorded anywhere yet.
 
 ---
 
+### 4.6 Derived data lives outside the tables that own facts
+
+**Derived data is not stored, except as an optimisation — and when it is stored it lives
+in its own obviously-rebuildable object, never as a column on an authoritative table.**
+
+"Who speaks in this series" is the first instance, and the reason `series.rabbi_id` is
+gone rather than merely nullable. It is a view:
+
+```sql
+CREATE VIEW series_speakers AS
+SELECT l.series_id, ls.speaker_id, count(*) AS lesson_count
+FROM lessons l JOIN lesson_speakers ls ON ls.lesson_id = l.id
+GROUP BY l.series_id, ls.speaker_id;
+```
+
+Zero storage, cannot drift, correct by construction. Speaker → series browsing goes
+through it, and so does the "this series is by X" label a UI wants — that is just
+`series_speakers` ordered by `lesson_count`, which also answers "…and these 17 others"
+for an anthology, and returns nothing for a series with no lessons yet.
+
+If it ever gets slow: set-valued aggregates become a **materialised view** refreshed at
+the end of discovery (its definition is its own recreation recipe); scalar per-entity
+fields — counts, total duration, first/last lesson date — go in a **1:1 sidecar table**
+named for what it is, `series_stats(series_id PK, …)`, never a column on `series`.
+Nothing is built now; this records where the pressure valve is.
+
+---
+
 ## 5. Deliberately deferred
 
 - **Per-stage tracking (`runs` / `stage_runs`).** Design.md §7.2 describes a tracking
@@ -287,7 +474,8 @@ one that was never attempted, since failures aren't recorded anywhere yet.
     (§3.4a) records a download's *success*, not its attempts, so a lesson that failed
     to download is indistinguishable from one that was never tried. Acceptable while
     this runs by hand; worth revisiting once it runs as an unattended daily job.
-- **`series_sources` table.** Discussed and intentionally not built yet — see §4.1.
+- ~~**`series_sources` table.**~~ **Built** — as `sources` + `ingest_rules` (§3.1c, §3.1d).
+  See §4.1 for what moved into data and what stayed code.
 - **Lesson translation.** `lessons.title_en` and `lessons.description_en` exist so those
   columns don't need a migration later, but nothing populates them yet — that's an LLM
   stage (experimental half, per design.md §2) to design when translation is actually
@@ -295,4 +483,5 @@ one that was never attempted, since failures aren't recorded anywhere yet.
 - **Cache eviction.** Local cache is cleared manually for now. An eviction policy is a
   problem for when the pipeline runs unattended and fetches new lessons daily, not
   before.
-- **`lesson_type` enum.** See §4.4.
+- ~~**`lesson_type` enum.**~~ **Built** — as the `lesson_types` side table rather than a
+  PG enum, so adding a value is a row and not a migration. Vocabulary in §4.4.

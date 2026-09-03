@@ -1,6 +1,6 @@
 """Thin client for the YouTube Data API v3 calls the YouTube adapters need.
 
-Used by YouTubePlaylistAdapter subclasses at runtime (to resolve the yearly Daily
+Used by YouTubeSourceAdapter at runtime (to resolve the yearly Daily
 Halacha playlists by pattern, see documents/plans/adapters-plan.md §1.1) and by
 list_youtube_playlists.py for one-off lookups. Not used for listing videos within a
 playlist or for downloading — that stays on yt-dlp (no API key/quota needed there).

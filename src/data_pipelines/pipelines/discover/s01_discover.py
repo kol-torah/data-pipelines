@@ -24,7 +24,6 @@ from data_pipelines.adapters.registry import get_source_adapter
 from data_pipelines.adapters.yt_dlp_cli import warn_if_outdated
 from data_pipelines.config import get_settings
 from data_pipelines.db import IngestRule, Lesson, LessonSpeaker, LessonType, Series, SpeakerAlias
-from data_pipelines.pipelines.discover.preconditions import require_rebuilt_lessons
 from data_pipelines.pipelines.discover.series import series_to_run
 from data_pipelines.pipelines.discover.text import pluralize
 from data_pipelines.progress import make_progress
@@ -120,7 +119,6 @@ def discover_for_rule(
 
 
 def discover_all(session: Session, series_list: list[Series]) -> None:
-    require_rebuilt_lessons(session)
     rules = rules_for(session, series_list)
     lesson_type_ids = {t.slug: t.id for t in session.scalars(select(LessonType))}
 

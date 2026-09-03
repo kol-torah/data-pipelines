@@ -140,9 +140,7 @@ class Lesson(Base):
     __table_args__ = (UniqueConstraint("source_id", "external_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    # Nullable only until the rebuild has repopulated every row (migration 9a1c4f2be7d0
-    # is a two-phase column add); tightened to NOT NULL once discover has re-run.
-    source_id: Mapped[int | None] = mapped_column(ForeignKey("sources.id"), index=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("sources.id"), index=True)
     series_id: Mapped[int] = mapped_column(ForeignKey("series.id"), index=True)
     external_id: Mapped[str]
     url: Mapped[str]
@@ -159,7 +157,7 @@ class Lesson(Base):
     recorded_at: Mapped[datetime | None]
     discovered_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
-    source: Mapped["Source | None"] = relationship()
+    source: Mapped["Source"] = relationship()
     series: Mapped["Series"] = relationship(back_populates="lessons")
     lesson_type: Mapped["LessonType | None"] = relationship()
     speakers: Mapped[list["LessonSpeaker"]] = relationship(back_populates="lesson")

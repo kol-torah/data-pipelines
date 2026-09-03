@@ -23,7 +23,6 @@ from data_pipelines.pipelines.discover.s02_download import (
     run_downloads,
 )
 from data_pipelines.pipelines.discover.s03_store import store_all
-from data_pipelines.pipelines.discover.preconditions import require_rekeyed_audio
 from data_pipelines.pipelines.discover.series import series_to_run
 
 
@@ -42,7 +41,6 @@ def run(series_slug: str | None = None) -> None:
         discover_all(session, series_list)
 
         print("=== stage 2: download ===")
-        require_rekeyed_audio(session)
         jobs: list[DownloadJob] = []
         for series in series_list:
             pending = recover_from_bucket(session, series, lessons_needing_download(session, series))

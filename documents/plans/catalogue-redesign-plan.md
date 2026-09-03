@@ -1,6 +1,8 @@
 # Plan: catalogue redesign — sources, series, and who actually taught the lesson
 
-**Status:** Proposed redesign — for review. Nothing implemented.
+**Status:** Steps 1-7 **done** (2026-09-03) — schema migrated, catalogue reseeded, S3
+re-keyed, derived data rebuilt from the bucket with zero downloads, old objects deleted.
+Remaining: the lab picker (§7.6), the admin website (§7.5), and the new channels (§7.1-7.4).
 **Survey it depends on:** `documents/pipelines/kolel-channels.md` — every number here comes
 from it.
 **Changes:** `documents/database-schema.md` §2, §3.1, §3.2, §3.3, §4.1, §4.2, §4.4, §5;
@@ -648,6 +650,11 @@ catalogue must be settled before anything is copied; and the re-key needs the **
 7. **Verify, then clean up.** Only once the criteria below pass, delete the old-key S3
    objects. Until that deletion the migration is fully reversible: the bucket still holds
    every original object and step 1 still holds the row that named it.
+**Steps 1-7 are complete.** Outcome: 2,210 lessons and 2,208 audio files, zero lessons
+lost, 6.8 MB downloaded (the two videos uploaded to YouTube since the last discover run),
+every lesson carrying a source, a type and a speaker. Two Eliyahu lessons remain without
+audio, as they were before — their harav.org links are dead upstream.
+
 8. **The lab picker** (§7.6) — before the catalogue admin, because it is the tool in daily
    use. `src/data_pipelines/lab/` needs no changes; only the picker API and its page.
 9. **Admin website** (§7.5) — the catalogue screens, which are only needed once new
