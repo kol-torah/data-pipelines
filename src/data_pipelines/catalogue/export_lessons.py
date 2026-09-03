@@ -47,7 +47,7 @@ class LessonSnapshot(BaseModel):
     url: str
     title_he: str
     description_he: str | None = None
-    lesson_type: str
+    lesson_type: str | None = None
     published_at: datetime | None = None
     recorded_at: datetime | None = None
     # None for a lesson discovered but never stored — two exist today, both Eliyahu.
@@ -61,7 +61,11 @@ class LessonsSnapshot(BaseModel):
 
 def build_snapshot(session: Session) -> LessonsSnapshot:
     lessons = session.scalars(
-        select(Lesson).options(selectinload(Lesson.series), selectinload(Lesson.audio_file))
+        select(Lesson).options(
+            selectinload(Lesson.series),
+            selectinload(Lesson.audio_file),
+            selectinload(Lesson.lesson_type),
+        )
     ).all()
     rows = [
         LessonSnapshot(
@@ -70,7 +74,7 @@ def build_snapshot(session: Session) -> LessonsSnapshot:
             url=lesson.url,
             title_he=lesson.title_he,
             description_he=lesson.description_he,
-            lesson_type=lesson.lesson_type,
+            lesson_type=lesson.lesson_type.slug if lesson.lesson_type is not None else None,
             published_at=lesson.published_at,
             recorded_at=lesson.recorded_at,
             audio=(
