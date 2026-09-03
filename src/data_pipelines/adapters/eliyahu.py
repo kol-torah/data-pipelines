@@ -17,8 +17,9 @@ from urllib.parse import unquote, urlparse
 import httpx
 from rich.progress import Progress
 
-from data_pipelines.adapters.base import LessonCandidate
-from data_pipelines.adapters.http import DirectUrlAdapter
+from data_pipelines.adapters.base import KIND_WHOLE_FEED, LessonCandidate, WholeFeedConfig
+from data_pipelines.db.models import IngestRule, Series
+from data_pipelines.adapters.http import DirectUrlSourceAdapter
 from data_pipelines.progress import label
 
 SEARCH_RSS_URL = (
@@ -117,13 +118,20 @@ class _FeedItem:
     published_at: datetime | None
 
 
-class ElyahuQAAdapter(DirectUrlAdapter):
+class ElyahuSourceAdapter(DirectUrlSourceAdapter):
+    RULE_CONFIGS = {KIND_WHOLE_FEED: WholeFeedConfig}
+
     def discover(
         self,
+        rule: IngestRule,
+        series: Series,
         *,
         known_external_ids: AbstractSet[str] = frozenset(),
         progress: Progress | None = None,
     ) -> Iterator[LessonCandidate]:
+        # See ArielSourceAdapter: validated to catch a rule pointed here by mistake,
+        # since the site's search feed *is* the series and shapes nothing else.
+        self.rule_config(rule)
         # Task starts as an indeterminate spinner (total=None) rather than being
         # created only after listing finishes: RSS pagination itself makes network
         # calls (page fetches, each subject to the same rate limit/retry as item

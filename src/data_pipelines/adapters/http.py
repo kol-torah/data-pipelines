@@ -1,8 +1,10 @@
-"""DirectUrlAdapter — shared download() for adapters whose discovery ends in a
-direct-download URL. documents/plans/adapters-plan.md §3.
+"""DirectUrlSourceAdapter — shared download() for sources whose discovery ends in a
+direct-download URL. documents/plans/catalogue-redesign-plan.md §3.4 (`platform: http`).
 
-discover() stays abstract: Eliyahu's and Ariel's discovery have nothing in common
-beyond "eventually produce a URL".
+discover() stays abstract: Eliyahu's and Ariel's listings have nothing in common beyond
+"eventually produce a URL", and unlike the YouTube sources they cannot be split into a
+generic lister plus a title parser — a Spreaker page and a two-hop RSS scrape produce
+finished candidates, not raw entries.
 """
 
 import tempfile
@@ -11,11 +13,11 @@ from urllib.parse import urlparse
 
 import httpx
 
-from data_pipelines.adapters.base import SeriesAdapter
+from data_pipelines.adapters.base import SourceAdapter
 from data_pipelines.db.models import Lesson
 
 
-class DirectUrlAdapter(SeriesAdapter):
+class DirectUrlSourceAdapter(SourceAdapter):
     async def download(self, lesson: Lesson) -> Path:
         out_dir = Path(tempfile.mkdtemp(prefix="direct-url-"))
         filename = Path(urlparse(lesson.url).path).name or lesson.external_id

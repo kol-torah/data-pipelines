@@ -61,12 +61,26 @@ def list_channel_playlists(channel_id: str) -> Iterator[PlaylistInfo]:
             return
 
 
-def get_video_publish_dates(video_ids: Iterable[str]) -> dict[str, datetime]:
-    """snippet.publishedAt per video id — flat-playlist listing doesn't carry this
-    (see YouTubePlaylistAdapter.discover), so it's fetched separately, batched 50 at
-    a time (the API's per-request id limit)."""
+@dataclass
+class VideoSnippet:
+    """What `part=snippet` gives us that the flat-playlist listing does not.
+
+    The description is kept because it is *already paid for*: the same call that fetches
+    `publishedAt` returns it, and it carries the speaker for a large share of the videos
+    whose titles omit one — 39 of 50 sampled at Har Etzion, 18 of 50 at Meir
+    (documents/plans/catalogue-redesign-plan.md §1.1). Discarding it, as this module used
+    to, meant paying for that information and throwing it away."""
+
+    published_at: datetime
+    description: str
+
+
+def get_video_snippets(video_ids: Iterable[str]) -> dict[str, VideoSnippet]:
+    """snippet.publishedAt and snippet.description per video id — the flat-playlist
+    listing carries neither, so they're fetched separately, batched 50 at a time (the
+    API's per-request id limit)."""
     ids = list(video_ids)
-    publish_dates: dict[str, datetime] = {}
+    snippets: dict[str, VideoSnippet] = {}
     for i in range(0, len(ids), 50):
         batch = ids[i : i + 50]
         response = httpx.get(
@@ -79,5 +93,9 @@ def get_video_publish_dates(video_ids: Iterable[str]) -> dict[str, datetime]:
         )
         response.raise_for_status()
         for item in response.json()["items"]:
-            publish_dates[item["id"]] = datetime.fromisoformat(item["snippet"]["publishedAt"])
-    return publish_dates
+            snippet = item["snippet"]
+            snippets[item["id"]] = VideoSnippet(
+                published_at=datetime.fromisoformat(snippet["publishedAt"]),
+                description=snippet.get("description") or "",
+            )
+    return snippets

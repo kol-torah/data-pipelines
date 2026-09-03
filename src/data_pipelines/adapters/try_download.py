@@ -12,9 +12,10 @@ import asyncio
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from data_pipelines.adapters.registry import ADAPTERS
+from data_pipelines.adapters.registry import get_source_adapter
 from data_pipelines.config import get_settings
 from data_pipelines.db import Lesson, Series
+from data_pipelines.pipelines.discover.s01_discover import rules_for
 
 
 async def try_download(series_slug: str, limit: int) -> None:
@@ -24,17 +25,25 @@ async def try_download(series_slug: str, limit: int) -> None:
         if series is None:
             raise SystemExit(f"no series with slug {series_slug!r}")
 
-        adapter = ADAPTERS[series.adapter_key](series)
+        rules = rules_for(session, [series])
+        if not rules:
+            raise SystemExit(f"series {series_slug!r} has no enabled ingest rule")
+        adapter = get_source_adapter(rules[0].source)
+        if adapter is None:
+            raise SystemExit(f"no adapter for parser_key {rules[0].source.parser_key!r}")
+
         lessons = []
-        for candidate in adapter.discover():
+        for candidate in adapter.discover(rules[0], series):
             lessons.append(
                 Lesson(
+                    source_id=rules[0].source_id,
                     series_id=series.id,
                     external_id=candidate.external_id,
                     url=candidate.url,
                     title_he=candidate.title_he,
                     description_he=candidate.description_he,
-                    lesson_type=candidate.lesson_type or series.lesson_type,
+                    speaker_raw=candidate.speaker_raw,
+                    lesson_type_id=series.lesson_type_id,
                     published_at=candidate.published_at,
                     recorded_at=candidate.recorded_at,
                 )
