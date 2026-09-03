@@ -1,17 +1,22 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { createSeries, deleteSeries, listRabbis, listSeries, updateSeries } from '../api/catalogue'
-import type { Rabbi, Series, SeriesWrite } from '../api/catalogue'
+import {
+  createSeries,
+  deleteSeries,
+  listLessonTypes,
+  listSeries,
+  listSpeakers,
+  updateSeries,
+} from '../api/catalogue'
+import type { LessonType, Series, SeriesWrite } from '../api/catalogue'
 
-function emptyForm(rabbis: Rabbi[]): SeriesWrite {
+function emptyForm(lessonTypes: LessonType[]): SeriesWrite {
   return {
-    rabbi_id: rabbis[0]?.id ?? 0,
     name_he: '',
     name_en: '',
     slug: '',
-    lesson_type: '',
-    adapter_key: '',
+    lesson_type: lessonTypes[0]?.slug ?? '',
     description_he: '',
     description_en: '',
   }
@@ -19,14 +24,14 @@ function emptyForm(rabbis: Rabbi[]): SeriesWrite {
 
 function SeriesForm({
   initial,
-  rabbis,
+  lessonTypes,
   onSubmit,
   onCancel,
   onDelete,
   submitLabel,
 }: {
   initial: SeriesWrite
-  rabbis: Rabbi[]
+  lessonTypes: LessonType[]
   onSubmit: (body: SeriesWrite) => void
   onCancel?: () => void
   onDelete?: () => void
@@ -41,21 +46,6 @@ function SeriesForm({
         onSubmit(form)
       }}
     >
-      <div className="kt-field">
-        <label htmlFor="rabbi_id">רב</label>
-        <select
-          id="rabbi_id"
-          required
-          value={form.rabbi_id}
-          onChange={(e) => setForm({ ...form, rabbi_id: Number(e.target.value) })}
-        >
-          {rabbis.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name_en} ({r.slug})
-            </option>
-          ))}
-        </select>
-      </div>
       <div className="kt-field">
         <label htmlFor="name_he">שם (עברית)</label>
         <input
@@ -85,24 +75,24 @@ function SeriesForm({
           onChange={(e) => setForm({ ...form, slug: e.target.value })}
         />
       </div>
+      {/* No adapter key and no speaker. Where a series' lessons come from is an
+          ingest_rules row created by accepting a surveyed source, not a string typed
+          here; who teaches them is derived from the lessons themselves
+          (catalogue-redesign-plan.md §6, database-schema.md §3.2). */}
       <div className="kt-field">
         <label htmlFor="lesson_type">סוג שיעור</label>
-        <input
+        <select
           id="lesson_type"
           required
           value={form.lesson_type}
           onChange={(e) => setForm({ ...form, lesson_type: e.target.value })}
-        />
-      </div>
-      <div className="kt-field">
-        <label htmlFor="adapter_key">Adapter key</label>
-        <input
-          id="adapter_key"
-          dir="ltr"
-          required
-          value={form.adapter_key}
-          onChange={(e) => setForm({ ...form, adapter_key: e.target.value })}
-        />
+        >
+          {lessonTypes.map((t) => (
+            <option key={t.slug} value={t.slug}>
+              {t.name_he}
+            </option>
+          ))}
+        </select>
       </div>
       <div className="kt-field">
         <label htmlFor="description_he">תיאור (עברית)</label>
@@ -144,17 +134,17 @@ export function SeriesPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
-  const rabbiIdParam = searchParams.get('rabbi_id')
-  const rabbiId = rabbiIdParam ? Number(rabbiIdParam) : undefined
+  const rabbiIdParam = searchParams.get('speaker_id')
+  const speakerId = rabbiIdParam ? Number(rabbiIdParam) : undefined
 
-  const { data: rabbis } = useQuery({ queryKey: ['rabbis'], queryFn: listRabbis })
+  const { data: lessonTypes } = useQuery({ queryKey: ['lesson-types'], queryFn: listLessonTypes })
   const {
     data: series,
     isPending,
     error,
   } = useQuery({
-    queryKey: ['series', rabbiId ?? null],
-    queryFn: () => listSeries(rabbiId),
+    queryKey: ['series', speakerId ?? null],
+    queryFn: () => listSeries(speakerId),
   })
 
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -191,15 +181,18 @@ export function SeriesPage() {
     onError: (e: Error) => setMutationError(e.message),
   })
 
-  const filterRabbi = rabbiId ? rabbis?.find((r) => r.id === rabbiId) : undefined
+  // Only for the "filtered by X" heading — the series rows carry their own derived
+  // speaker lists, so this is the one place a speaker lookup is still needed.
+  const { data: speakers } = useQuery({ queryKey: ['speakers'], queryFn: listSpeakers })
+  const filterSpeaker = speakerId ? speakers?.find((r) => r.id === speakerId) : undefined
 
   return (
     <div className="kt-card">
       <h2>סדרות</h2>
 
-      {rabbiId && (
+      {speakerId && (
         <div className="kt-filter-banner">
-          <span>מציג סדרות עבור {filterRabbi ? filterRabbi.name_en : `רב #${rabbiId}`}</span>
+          <span>מציג סדרות עבור {filterSpeaker ? filterSpeaker.name_he : `דובר #${speakerId}`}</span>
           <button type="button" className="kt-btn kt-btn--secondary" onClick={() => setSearchParams({})}>
             נקה סינון
           </button>
@@ -214,7 +207,7 @@ export function SeriesPage() {
           <div className="kt-trow kt-trow--head">
             <span className="kt-tcell">שם (עברית)</span>
             <span className="kt-tcell">שם (אנגלית)</span>
-            <span className="kt-tcell">רב</span>
+            <span className="kt-tcell">דוברים</span>
             <span className="kt-tcell">שיעורים</span>
             <span className="kt-tcell--actions" />
           </div>
@@ -224,7 +217,7 @@ export function SeriesPage() {
                 <div style={{ flex: 1 }}>
                   <SeriesForm
                     initial={item}
-                    rabbis={rabbis ?? []}
+                    lessonTypes={lessonTypes ?? []}
                     submitLabel="שמירה"
                     onCancel={() => setEditingId(null)}
                     onDelete={() => {
@@ -238,7 +231,7 @@ export function SeriesPage() {
               <div className="kt-trow kt-trow--link" key={item.id} onClick={() => navigate(`/series/${item.id}`)}>
                 <span className="kt-tcell">{item.name_he}</span>
                 <span className="kt-tcell kt-time">{item.name_en}</span>
-                <span className="kt-tcell kt-time">{item.rabbi_name_en}</span>
+                <span className="kt-tcell kt-time">{item.speakers.map((sp) => sp.name_he).join(' • ') || '—'}</span>
                 <span className="kt-tcell">{item.lesson_count}</span>
                 <span className="kt-tcell--actions">
                   <button
@@ -261,14 +254,14 @@ export function SeriesPage() {
 
       {mutationError && <p className="kt-error">{mutationError}</p>}
 
-      {rabbis && rabbis.length === 0 && <p className="kt-meta">יש להוסיף רב לפני הוספת סדרה.</p>}
-      {rabbis && rabbis.length > 0 && (
+      {lessonTypes && lessonTypes.length === 0 && <p className="kt-meta">אין סוגי שיעור מוגדרים.</p>}
+      {lessonTypes && lessonTypes.length > 0 && (
         <details style={{ marginTop: 'var(--kt-space-5)' }}>
           <summary className="kt-meta">הוספת סדרה</summary>
           <SeriesForm
             key={addKey}
-            initial={emptyForm(rabbis)}
-            rabbis={rabbis}
+            initial={emptyForm(lessonTypes)}
+            lessonTypes={lessonTypes}
             submitLabel="הוספה"
             onSubmit={(body) => createMutation.mutate(body)}
           />

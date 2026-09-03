@@ -182,6 +182,25 @@ class LessonSpeaker(Base):
     speaker: Mapped["Speaker"] = relationship()
 
 
+class SeriesSpeaker(Base):
+    """**Read-only view**, not a table — documents/database-schema.md §4.6.
+
+    "Who teaches this series" is derived from its lessons' speakers, so it is a view and
+    can never drift. Mapped here only so callers can select it with the same typed
+    machinery as everything else; nothing writes to it, and Alembic is told to leave it
+    alone (`is_view`, see alembic/env.py).
+
+    A series with no lessons yet simply has no rows here, which every caller has to
+    tolerate — a series always starts empty."""
+
+    __tablename__ = "series_speakers"
+    __table_args__ = {"info": {"is_view": True}}
+
+    series_id: Mapped[int] = mapped_column(primary_key=True)
+    speaker_id: Mapped[int] = mapped_column(primary_key=True)
+    lesson_count: Mapped[int]
+
+
 class LessonDownload(Base):
     """documents/database-schema.md §3.4a."""
 

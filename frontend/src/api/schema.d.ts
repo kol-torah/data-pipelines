@@ -4,25 +4,25 @@
  */
 
 export interface paths {
-    "/api/rabbis": {
+    "/api/speakers": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Rabbis */
-        get: operations["list_rabbis_api_rabbis_get"];
+        /** List Speakers */
+        get: operations["list_speakers_api_speakers_get"];
         put?: never;
-        /** Create Rabbi */
-        post: operations["create_rabbi_api_rabbis_post"];
+        /** Create Speaker */
+        post: operations["create_speaker_api_speakers_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/rabbis/{rabbi_id}": {
+    "/api/speakers/{speaker_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -30,11 +30,31 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Update Rabbi */
-        put: operations["update_rabbi_api_rabbis__rabbi_id__put"];
+        /** Update Speaker */
+        put: operations["update_speaker_api_speakers__speaker_id__put"];
         post?: never;
-        /** Delete Rabbi */
-        delete: operations["delete_rabbi_api_rabbis__rabbi_id__delete"];
+        /** Delete Speaker */
+        delete: operations["delete_speaker_api_speakers__speaker_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lesson-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Lesson Types
+         * @description The fixed subject vocabulary (database-schema.md §4.4) — a select, not free text.
+         */
+        get: operations["list_lesson_types_api_lesson_types_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -47,7 +67,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Series */
+        /**
+         * List Series
+         * @description Filtering by speaker goes through the view, since a series has no speaker of its
+         *     own — it returns the series this speaker actually teaches lessons in.
+         */
         get: operations["list_series_api_series_get"];
         put?: never;
         /** Create Series */
@@ -121,8 +145,13 @@ export interface paths {
         };
         /**
          * List Lab Lessons
-         * @description AL §2's selection axes: rabbi/series/lesson_type, or an explicit id list —
+         * @description AL §2's selection axes: speaker/series/lesson_type, or an explicit id list —
          *     applied live against public.lessons (AL §1.1), no seeding step.
+         *
+         *     Filtering by speaker now goes through `lesson_speakers` rather than the series'
+         *     former `rabbi_id`. That is a behaviour change and an improvement: a co-taught lesson
+         *     appears under each of its speakers, and a lesson whose speaker differs from the rest
+         *     of its series is no longer silently filed under the wrong one.
          */
         get: operations["list_lab_lessons_api_lab_lessons_get"];
         put?: never;
@@ -422,9 +451,9 @@ export interface components {
         };
         /**
          * LabLessonRead
-         * @description Built explicitly (not from_attributes) — series_name_he/en and
-         *     rabbi_name_he/en are joined, and cache_status is computed against
-         *     local_cache_dir, none of them a Lesson attribute.
+         * @description Built explicitly (not from_attributes) — series_name_he/en are joined, speakers
+         *     come from lesson_speakers, and cache_status is computed against local_cache_dir,
+         *     none of them a Lesson attribute.
          */
         LabLessonRead: {
             /** Id */
@@ -435,16 +464,16 @@ export interface components {
             series_name_he: string;
             /** Series Name En */
             series_name_en: string;
-            /** Rabbi Name He */
-            rabbi_name_he: string;
-            /** Rabbi Name En */
-            rabbi_name_en: string;
+            /** Speakers */
+            speakers: components["schemas"]["SpeakerBrief"][];
+            /** Speaker Raw */
+            speaker_raw: string | null;
             /** Title He */
             title_he: string;
             /** Title En */
             title_en: string | null;
             /** Lesson Type */
-            lesson_type: string;
+            lesson_type: string | null;
             /** Published At */
             published_at: string | null;
             /** Recorded At */
@@ -468,7 +497,9 @@ export interface components {
             /** Title En */
             title_en: string | null;
             /** Lesson Type */
-            lesson_type: string;
+            lesson_type: string | null;
+            /** Speakers */
+            speakers: components["schemas"]["SpeakerBrief"][];
             /** Published At */
             published_at: string | null;
             /** Recorded At */
@@ -485,6 +516,17 @@ export interface components {
          * @enum {string}
          */
         LessonStatus: "discovered" | "downloaded" | "stored";
+        /** LessonTypeRead */
+        LessonTypeRead: {
+            /** Id */
+            id: number;
+            /** Slug */
+            slug: string;
+            /** Name He */
+            name_he: string;
+            /** Name En */
+            name_en: string;
+        };
         /** MergeParams */
         MergeParams: {
             /** Transcribe Job Id */
@@ -530,32 +572,6 @@ export interface components {
             /** Speaker */
             speaker: string | null;
         };
-        /**
-         * RabbiRead
-         * @description Built explicitly (not from_attributes) — series_count is a query-side
-         *     aggregate, not a Rabbi attribute.
-         */
-        RabbiRead: {
-            /** Id */
-            id: number;
-            /** Name He */
-            name_he: string;
-            /** Name En */
-            name_en: string;
-            /** Slug */
-            slug: string;
-            /** Series Count */
-            series_count: number;
-        };
-        /** RabbiWrite */
-        RabbiWrite: {
-            /** Name He */
-            name_he: string;
-            /** Name En */
-            name_en: string;
-            /** Slug */
-            slug: string;
-        };
         /** ResetPreview */
         ResetPreview: {
             /** Lesson Count */
@@ -570,16 +586,12 @@ export interface components {
         };
         /**
          * SeriesRead
-         * @description Built explicitly, same reasoning as RabbiRead — rabbi_name_en/lesson_count
-         *     are joined/aggregated, not Series attributes.
+         * @description Built explicitly, same reasoning as SpeakerRead — speakers and lesson_count are
+         *     joined/aggregated, not Series attributes.
          */
         SeriesRead: {
             /** Id */
             id: number;
-            /** Rabbi Id */
-            rabbi_id: number;
-            /** Rabbi Name En */
-            rabbi_name_en: string;
             /** Name He */
             name_he: string;
             /** Name En */
@@ -588,19 +600,28 @@ export interface components {
             slug: string;
             /** Lesson Type */
             lesson_type: string;
-            /** Adapter Key */
-            adapter_key: string;
+            /** Lesson Type Name He */
+            lesson_type_name_he: string;
             /** Description He */
             description_he: string | null;
             /** Description En */
             description_en: string | null;
             /** Lesson Count */
             lesson_count: number;
+            /** Speakers */
+            speakers: components["schemas"]["SpeakerBrief"][];
         };
-        /** SeriesWrite */
+        /**
+         * SeriesWrite
+         * @description No speaker and no source.
+         *
+         *     A series' speakers are derived from its lessons, so there is nothing to write. Its
+         *     source wiring is an `ingest_rules` row, which is created by accepting a surveyed
+         *     playlist rather than by typing an adapter key into a form — see
+         *     catalogue-redesign-plan.md §6. This form edits what a series *is*: its names, its
+         *     slug, its subject.
+         */
         SeriesWrite: {
-            /** Rabbi Id */
-            rabbi_id: number;
             /** Name He */
             name_he: string;
             /** Name En */
@@ -609,12 +630,42 @@ export interface components {
             slug: string;
             /** Lesson Type */
             lesson_type: string;
-            /** Adapter Key */
-            adapter_key: string;
             /** Description He */
             description_he?: string | null;
             /** Description En */
             description_en?: string | null;
+        };
+        /**
+         * SpeakerBrief
+         * @description A speaker as it appears attached to something else — a series' derived speaker
+         *     list, or a lesson's attribution.
+         */
+        SpeakerBrief: {
+            /** Id */
+            id: number;
+            /** Name He */
+            name_he: string;
+            /** Name En */
+            name_en: string;
+            /** Slug */
+            slug: string;
+        };
+        /**
+         * SpeakerRead
+         * @description Built explicitly (not from_attributes) — lesson_count is a query-side aggregate,
+         *     not a Speaker attribute.
+         */
+        SpeakerRead: {
+            /** Id */
+            id: number;
+            /** Name He */
+            name_he: string;
+            /** Name En */
+            name_en: string;
+            /** Slug */
+            slug: string;
+            /** Lesson Count */
+            lesson_count: number;
         };
         /**
          * SpeakerRole
@@ -636,6 +687,15 @@ export interface components {
             total_ms: number;
             /** First Start Ms */
             first_start_ms: number;
+        };
+        /** SpeakerWrite */
+        SpeakerWrite: {
+            /** Name He */
+            name_he: string;
+            /** Name En */
+            name_en: string;
+            /** Slug */
+            slug: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -659,7 +719,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    list_rabbis_api_rabbis_get: {
+    list_speakers_api_speakers_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -674,12 +734,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RabbiRead"][];
+                    "application/json": components["schemas"]["SpeakerRead"][];
                 };
             };
         };
     };
-    create_rabbi_api_rabbis_post: {
+    create_speaker_api_speakers_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -688,7 +748,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RabbiWrite"];
+                "application/json": components["schemas"]["SpeakerWrite"];
             };
         };
         responses: {
@@ -698,7 +758,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RabbiRead"];
+                    "application/json": components["schemas"]["SpeakerRead"];
                 };
             };
             /** @description Validation Error */
@@ -712,18 +772,18 @@ export interface operations {
             };
         };
     };
-    update_rabbi_api_rabbis__rabbi_id__put: {
+    update_speaker_api_speakers__speaker_id__put: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                rabbi_id: number;
+                speaker_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RabbiWrite"];
+                "application/json": components["schemas"]["SpeakerWrite"];
             };
         };
         responses: {
@@ -733,7 +793,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RabbiRead"];
+                    "application/json": components["schemas"]["SpeakerRead"];
                 };
             };
             /** @description Validation Error */
@@ -747,12 +807,12 @@ export interface operations {
             };
         };
     };
-    delete_rabbi_api_rabbis__rabbi_id__delete: {
+    delete_speaker_api_speakers__speaker_id__delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                rabbi_id: number;
+                speaker_id: number;
             };
             cookie?: never;
         };
@@ -776,10 +836,30 @@ export interface operations {
             };
         };
     };
+    list_lesson_types_api_lesson_types_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LessonTypeRead"][];
+                };
+            };
+        };
+    };
     list_series_api_series_get: {
         parameters: {
             query?: {
-                rabbi_id?: number | null;
+                speaker_id?: number | null;
             };
             header?: never;
             path?: never;
@@ -1031,7 +1111,7 @@ export interface operations {
     list_lab_lessons_api_lab_lessons_get: {
         parameters: {
             query?: {
-                rabbi_id?: number | null;
+                speaker_id?: number | null;
                 series_id?: number | null;
                 lesson_type?: string | null;
                 lesson_ids?: number[] | null;

@@ -14,8 +14,8 @@ export function Header() {
         מעבדה — עיבוד שיעורים
       </span>
       <nav className="kt-admin-nav">
-        <NavLink to="/rabbis" className={({ isActive }) => (isActive ? 'is-active' : undefined)}>
-          רבנים
+        <NavLink to="/speakers" className={({ isActive }) => (isActive ? 'is-active' : undefined)}>
+          דוברים
         </NavLink>
         <NavLink to="/series" className={({ isActive }) => (isActive ? 'is-active' : undefined)}>
           סדרות

@@ -9,9 +9,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from data_pipelines.admin_lab_api.db import get_db
+from data_pipelines.admin_lab_api.schemas.catalogue import SpeakerBrief
 from data_pipelines.admin_lab_api.schemas.lessons import CacheStatus, LabLessonRead
 from data_pipelines.config import get_settings
-from data_pipelines.db.models import Lesson, Series
+from data_pipelines.db.models import Lesson, LessonSpeaker, LessonType, Series
 from data_pipelines.lab.models import LabJobRow
 from data_pipelines.pipelines.discover.storage import download_from_bucket
 
@@ -19,7 +20,12 @@ router = APIRouter(prefix="/api/lab", tags=["lab-lessons"])
 
 DbSession = Annotated[Session, Depends(get_db)]
 
-_LOAD_OPTIONS = (selectinload(Lesson.audio_file), selectinload(Lesson.series).selectinload(Series.rabbi))
+_LOAD_OPTIONS = (
+    selectinload(Lesson.audio_file),
+    selectinload(Lesson.series),
+    selectinload(Lesson.lesson_type),
+    selectinload(Lesson.speakers).selectinload(LessonSpeaker.speaker),
+)
 
 
 def _cache_status(lesson: Lesson) -> CacheStatus:
@@ -35,11 +41,19 @@ def _lesson_read(lesson: Lesson) -> LabLessonRead:
         series_id=lesson.series_id,
         series_name_he=lesson.series.name_he,
         series_name_en=lesson.series.name_en,
-        rabbi_name_he=lesson.series.rabbi.name_he,
-        rabbi_name_en=lesson.series.rabbi.name_en,
+        speakers=[
+            SpeakerBrief(
+                id=ls.speaker.id,
+                name_he=ls.speaker.name_he,
+                name_en=ls.speaker.name_en,
+                slug=ls.speaker.slug,
+            )
+            for ls in sorted(lesson.speakers, key=lambda x: x.position)
+        ],
+        speaker_raw=lesson.speaker_raw,
         title_he=lesson.title_he,
         title_en=lesson.title_en,
-        lesson_type=lesson.lesson_type,
+        lesson_type=lesson.lesson_type.slug if lesson.lesson_type is not None else None,
         published_at=lesson.published_at,
         recorded_at=lesson.recorded_at,
         cache_status=_cache_status(lesson),
@@ -49,25 +63,43 @@ def _lesson_read(lesson: Lesson) -> LabLessonRead:
 @router.get("/lessons")
 def list_lab_lessons(
     db: DbSession,
-    rabbi_id: int | None = None,
+    speaker_id: int | None = None,
     series_id: int | None = None,
     lesson_type: str | None = None,
     lesson_ids: Annotated[list[int] | None, Query()] = None,
 ) -> list[LabLessonRead]:
-    """AL §2's selection axes: rabbi/series/lesson_type, or an explicit id list —
-    applied live against public.lessons (AL §1.1), no seeding step."""
+    """AL §2's selection axes: speaker/series/lesson_type, or an explicit id list —
+    applied live against public.lessons (AL §1.1), no seeding step.
+
+    Filtering by speaker now goes through `lesson_speakers` rather than the series'
+    former `rabbi_id`. That is a behaviour change and an improvement: a co-taught lesson
+    appears under each of its speakers, and a lesson whose speaker differs from the rest
+    of its series is no longer silently filed under the wrong one."""
     query = (
-        select(Lesson).join(Series, Series.id == Lesson.series_id).options(*_LOAD_OPTIONS).order_by(Lesson.discovered_at.desc())
+        select(Lesson)
+        .join(Series, Series.id == Lesson.series_id)
+        .options(*_LOAD_OPTIONS)
+        .order_by(Lesson.discovered_at.desc())
     )
     if lesson_ids:
         query = query.where(Lesson.id.in_(lesson_ids))
     else:
-        if rabbi_id is not None:
-            query = query.where(Series.rabbi_id == rabbi_id)
+        if speaker_id is not None:
+            query = query.where(
+                Lesson.id.in_(
+                    select(LessonSpeaker.lesson_id).where(
+                        LessonSpeaker.speaker_id == speaker_id
+                    )
+                )
+            )
         if series_id is not None:
             query = query.where(Lesson.series_id == series_id)
         if lesson_type is not None:
-            query = query.where(Lesson.lesson_type == lesson_type)
+            query = query.where(
+                Lesson.lesson_type_id.in_(
+                    select(LessonType.id).where(LessonType.slug == lesson_type)
+                )
+            )
     lessons = db.scalars(query).all()
     return [_lesson_read(lesson) for lesson in lessons]
 

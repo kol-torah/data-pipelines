@@ -11,7 +11,7 @@ export type LabJobSummary = components['schemas']['LabJobSummary']
 export type JobCreate = components['schemas']['JobCreate']
 
 export interface LabLessonFilter {
-  rabbiId?: number
+  speakerId?: number
   seriesId?: number
   lessonType?: string
   lessonIds?: number[]
@@ -19,7 +19,7 @@ export interface LabLessonFilter {
 
 export function listLabLessons(filter: LabLessonFilter = {}): Promise<LabLesson[]> {
   const params = new URLSearchParams()
-  if (filter.rabbiId != null) params.set('rabbi_id', String(filter.rabbiId))
+  if (filter.speakerId != null) params.set('speaker_id', String(filter.speakerId))
   if (filter.seriesId != null) params.set('series_id', String(filter.seriesId))
   if (filter.lessonType) params.set('lesson_type', filter.lessonType)
   filter.lessonIds?.forEach((id) => params.append('lesson_ids', String(id)))

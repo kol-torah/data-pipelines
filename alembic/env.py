@@ -25,6 +25,17 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def include_object(object, name, type_, reflected, compare_to) -> bool:
+    """Keep views out of autogenerate.
+
+    A view mapped onto Base (db.models.SeriesSpeaker) looks exactly like a table to
+    autogenerate, which would then propose creating it — and, on the next run, dropping
+    the real one. Views are created by the migration that introduces them and marked
+    `info={"is_view": True}` on the model."""
+    del name, reflected, compare_to
+    return not (type_ == "table" and object.info.get("is_view"))
+
+
 def get_url() -> str:
     return get_settings().database_url()
 
@@ -46,6 +57,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -63,7 +75,9 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            include_object=include_object,
         )
 
         with context.begin_transaction():

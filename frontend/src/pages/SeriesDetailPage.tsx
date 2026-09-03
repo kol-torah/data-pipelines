@@ -49,14 +49,25 @@ export function SeriesDetailPage() {
       <div className="kt-card">
         <h2>{series.name_he}</h2>
         <p className="kt-meta">
-          <Link to={`/series?rabbi_id=${series.rabbi_id}`} className="kt-time">
-            {series.rabbi_name_en}
-          </Link>
+          {/* Zero, one or several — derived from the lessons, so an anthology lists
+              them all and a series with no lessons yet lists none. */}
+          {series.speakers.length > 0 ? (
+            series.speakers.map((sp, i) => (
+              <span key={sp.id}>
+                {i > 0 && ' • '}
+                <Link to={`/series?speaker_id=${sp.id}`} className="kt-time">
+                  {sp.name_he}
+                </Link>
+              </span>
+            ))
+          ) : (
+            <span className="kt-time">ללא ייחוס</span>
+          )}
           {' — '}
           <span className="kt-time">{series.name_en}</span>
         </p>
         <p className="kt-meta">
-          סוג שיעור: {series.lesson_type} · Adapter: <span className="kt-time">{series.adapter_key}</span>
+          סוג שיעור: {series.lesson_type_name_he}
         </p>
         {series.description_he && <p>{series.description_he}</p>}
       </div>

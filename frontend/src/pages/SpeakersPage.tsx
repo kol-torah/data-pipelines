@@ -1,20 +1,20 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { createRabbi, deleteRabbi, listRabbis, updateRabbi } from '../api/catalogue'
-import type { Rabbi, RabbiWrite } from '../api/catalogue'
+import { createSpeaker, deleteSpeaker, listSpeakers, updateSpeaker } from '../api/catalogue'
+import type { Speaker, SpeakerWrite } from '../api/catalogue'
 
-const emptyForm: RabbiWrite = { name_he: '', name_en: '', slug: '' }
+const emptyForm: SpeakerWrite = { name_he: '', name_en: '', slug: '' }
 
-function RabbiForm({
+function SpeakerForm({
   initial,
   onSubmit,
   onCancel,
   onDelete,
   submitLabel,
 }: {
-  initial: RabbiWrite
-  onSubmit: (body: RabbiWrite) => void
+  initial: SpeakerWrite
+  onSubmit: (body: SpeakerWrite) => void
   onCancel?: () => void
   onDelete?: () => void
   submitLabel: string
@@ -76,18 +76,18 @@ function RabbiForm({
   )
 }
 
-export function RabbisPage() {
+export function SpeakersPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { data: rabbis, isPending, error } = useQuery({ queryKey: ['rabbis'], queryFn: listRabbis })
+  const { data: speakers, isPending, error } = useQuery({ queryKey: ['speakers'], queryFn: listSpeakers })
   const [editingId, setEditingId] = useState<number | null>(null)
   const [addKey, setAddKey] = useState(0)
   const [mutationError, setMutationError] = useState<string | null>(null)
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['rabbis'] })
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['speakers'] })
 
   const createMutation = useMutation({
-    mutationFn: createRabbi,
+    mutationFn: createSpeaker,
     onSuccess: () => {
       invalidate()
       setMutationError(null)
@@ -96,7 +96,7 @@ export function RabbisPage() {
     onError: (e: Error) => setMutationError(e.message),
   })
   const updateMutation = useMutation({
-    mutationFn: ({ id, body }: { id: number; body: RabbiWrite }) => updateRabbi(id, body),
+    mutationFn: ({ id, body }: { id: number; body: SpeakerWrite }) => updateSpeaker(id, body),
     onSuccess: () => {
       invalidate()
       setEditingId(null)
@@ -105,7 +105,7 @@ export function RabbisPage() {
     onError: (e: Error) => setMutationError(e.message),
   })
   const deleteMutation = useMutation({
-    mutationFn: deleteRabbi,
+    mutationFn: deleteSpeaker,
     onSuccess: () => {
       invalidate()
       setEditingId(null)
@@ -114,18 +114,18 @@ export function RabbisPage() {
     onError: (e: Error) => setMutationError(e.message),
   })
 
-  const startEdit = (rabbi: Rabbi) => {
-    setEditingId(rabbi.id)
+  const startEdit = (speaker: Speaker) => {
+    setEditingId(speaker.id)
     setMutationError(null)
   }
 
   return (
     <div className="kt-card">
-      <h2>רבנים</h2>
+      <h2>דוברים</h2>
       {isPending && <p>טוען...</p>}
       {error && <p className="kt-error">{error.message}</p>}
-      {rabbis && rabbis.length === 0 && <p className="kt-meta">אין עדיין רבנים.</p>}
-      {rabbis && rabbis.length > 0 && (
+      {speakers && speakers.length === 0 && <p className="kt-meta">אין עדיין דוברים.</p>}
+      {speakers && speakers.length > 0 && (
         <div className="kt-table">
           <div className="kt-trow kt-trow--head">
             <span className="kt-tcell">שם (עברית)</span>
@@ -134,38 +134,38 @@ export function RabbisPage() {
             <span className="kt-tcell">סדרות</span>
             <span className="kt-tcell--actions" />
           </div>
-          {rabbis.map((rabbi) =>
-            editingId === rabbi.id ? (
-              <div className="kt-trow" key={rabbi.id}>
+          {speakers.map((speaker) =>
+            editingId === speaker.id ? (
+              <div className="kt-trow" key={speaker.id}>
                 <div style={{ flex: 1 }}>
-                  <RabbiForm
-                    initial={rabbi}
+                  <SpeakerForm
+                    initial={speaker}
                     submitLabel="שמירה"
                     onCancel={() => setEditingId(null)}
                     onDelete={() => {
-                      if (confirm(`למחוק את ${rabbi.name_en}?`)) deleteMutation.mutate(rabbi.id)
+                      if (confirm(`למחוק את ${speaker.name_en}?`)) deleteMutation.mutate(speaker.id)
                     }}
-                    onSubmit={(body) => updateMutation.mutate({ id: rabbi.id, body })}
+                    onSubmit={(body) => updateMutation.mutate({ id: speaker.id, body })}
                   />
                 </div>
               </div>
             ) : (
               <div
                 className="kt-trow kt-trow--link"
-                key={rabbi.id}
-                onClick={() => navigate(`/series?rabbi_id=${rabbi.id}`)}
+                key={speaker.id}
+                onClick={() => navigate(`/series?speaker_id=${speaker.id}`)}
               >
-                <span className="kt-tcell">{rabbi.name_he}</span>
-                <span className="kt-tcell kt-time">{rabbi.name_en}</span>
-                <span className="kt-tcell kt-time">{rabbi.slug}</span>
-                <span className="kt-tcell">{rabbi.series_count}</span>
+                <span className="kt-tcell">{speaker.name_he}</span>
+                <span className="kt-tcell kt-time">{speaker.name_en}</span>
+                <span className="kt-tcell kt-time">{speaker.slug}</span>
+                <span className="kt-tcell">{speaker.lesson_count}</span>
                 <span className="kt-tcell--actions">
                   <button
                     type="button"
                     className="kt-btn kt-btn--secondary"
                     onClick={(e) => {
                       e.stopPropagation()
-                      startEdit(rabbi)
+                      startEdit(speaker)
                     }}
                   >
                     עריכה
@@ -180,8 +180,8 @@ export function RabbisPage() {
       {mutationError && <p className="kt-error">{mutationError}</p>}
 
       <details style={{ marginTop: 'var(--kt-space-5)' }}>
-        <summary className="kt-meta">הוספת רב</summary>
-        <RabbiForm key={addKey} initial={emptyForm} submitLabel="הוספה" onSubmit={(body) => createMutation.mutate(body)} />
+        <summary className="kt-meta">הוספת דובר</summary>
+        <SpeakerForm key={addKey} initial={emptyForm} submitLabel="הוספה" onSubmit={(body) => createMutation.mutate(body)} />
       </details>
     </div>
   )

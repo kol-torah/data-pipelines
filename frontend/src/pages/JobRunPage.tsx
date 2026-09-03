@@ -179,7 +179,7 @@ export function JobRunPage() {
         <h2>{lesson?.title_he ?? 'טוען...'}</h2>
         {lesson && (
           <p className="kt-meta">
-            {lesson.rabbi_name_he} — {lesson.series_name_he}
+            {lesson.speakers.map((sp) => sp.name_he).join(' • ') || (lesson.speaker_raw ?? 'ללא ייחוס')} — {lesson.series_name_he}
             {(lesson.recorded_at ?? lesson.published_at) && (
               <>
                 {' · '}

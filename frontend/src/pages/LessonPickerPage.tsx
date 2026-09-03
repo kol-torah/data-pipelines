@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { listRabbis, listSeries } from '../api/catalogue'
+import { listLessonTypes, listSeries, listSpeakers } from '../api/catalogue'
 import { ensureCached, listLabLessons, listRecentLessons } from '../api/lab'
 import type { LabLesson } from '../api/lab'
 import { CacheStatusBadge } from '../components/CacheStatusBadge'
@@ -15,7 +15,7 @@ export function LessonPickerPage() {
   // admin-lab-plan.md §3.3's reasoning) — otherwise navigating to a lesson and
   // back loses the filter and the list along with it.
   const [searchParams, setSearchParams] = useSearchParams()
-  const rabbiId = searchParams.get('rabbi_id') ? Number(searchParams.get('rabbi_id')) : undefined
+  const speakerId = searchParams.get('speaker_id') ? Number(searchParams.get('speaker_id')) : undefined
   const seriesId = searchParams.get('series_id') ? Number(searchParams.get('series_id')) : undefined
   const lessonType = searchParams.get('lesson_type') ?? undefined
   const idListText = searchParams.get('ids') ?? ''
@@ -35,24 +35,35 @@ export function LessonPickerPage() {
     return ids.length > 0 ? ids : undefined
   }, [idListText])
 
-  const { data: rabbis } = useQuery({ queryKey: ['rabbis'], queryFn: () => listRabbis() })
+  const { data: speakers } = useQuery({ queryKey: ['speakers'], queryFn: () => listSpeakers() })
+  const { data: lessonTypeRows } = useQuery({ queryKey: ['lesson-types'], queryFn: listLessonTypes })
   const { data: allSeries } = useQuery({ queryKey: ['series'], queryFn: () => listSeries() })
-  const filteredSeries = rabbiId != null ? allSeries?.filter((s) => s.rabbi_id === rabbiId) : allSeries
-  // SeriesRead only carries rabbi_name_en (schemas/catalogue.py) — rabbis is
-  // already loaded for the rabbi <select>, so look up name_he from there instead
-  // of adding a backend field for this one display case.
-  const rabbiNameHeById = useMemo(() => new Map(rabbis?.map((r) => [r.id, r.name_he])), [rabbis])
+  // A series carries a *derived* speaker list (SeriesRead.speakers, from the
+  // series_speakers view) rather than one speaker id, so scoping the series dropdown to
+  // a speaker means "series this speaker teaches in" — which is also true for an
+  // anthology they only partly teach.
+  const filteredSeries =
+    speakerId != null ? allSeries?.filter((s) => s.speakers.some((sp) => sp.id === speakerId)) : allSeries
+  // The vocabulary is a fixed side table now (database-schema.md §4.4), so the options
+  // come from the API rather than from whatever values happen to be in use.
   const lessonTypes = useMemo(
-    () => [...new Set((allSeries ?? []).map((s) => s.lesson_type))].sort(),
-    [allSeries],
+    () => (lessonTypeRows ?? []).map((t) => ({ slug: t.slug, label: t.name_he })),
+    [lessonTypeRows],
+  )
+
+  // lesson_type is a slug on the wire now; lessonTypes is already loaded for the
+  // <select>, so the Hebrew label comes from there rather than from a second backend
+  // field for this one display case.
+  const lessonTypeLabel = useMemo(
+    () => new Map((lessonTypeRows ?? []).map((t) => [t.slug, t.name_he])),
+    [lessonTypeRows],
   )
 
   const { data: recentLessons } = useQuery({ queryKey: ['lab', 'recent-lessons'], queryFn: () => listRecentLessons() })
-
-  const hasFilter = rabbiId != null || seriesId != null || lessonType != null || lessonIds != null
+  const hasFilter = speakerId != null || seriesId != null || lessonType != null || lessonIds != null
   const { data: lessons, isPending } = useQuery({
-    queryKey: ['lab', 'lessons', { rabbiId, seriesId, lessonType, lessonIds }],
-    queryFn: () => listLabLessons({ rabbiId, seriesId, lessonType, lessonIds }),
+    queryKey: ['lab', 'lessons', { speakerId, seriesId, lessonType, lessonIds }],
+    queryFn: () => listLabLessons({ speakerId, seriesId, lessonType, lessonIds }),
     // The catalogue already has thousands of lessons — an unfiltered query would
     // render a multi-thousand-row unvirtualized list (list virtualization is only
     // in scope for Phase 4's transcript/diarization lists, admin-lab-plan.md §4.8).
@@ -98,9 +109,16 @@ export function LessonPickerPage() {
       >
         <span className="kt-tcell">{lesson.title_he}</span>
         <span className="kt-tcell">
-          {lesson.rabbi_name_he} — {lesson.series_name_he}
+          {/* Zero, one or several — a co-taught lesson names both, and an
+              unattributed one falls back to whatever the source said. */}
+          {lesson.speakers.length > 0
+            ? lesson.speakers.map((sp) => sp.name_he).join(' • ')
+            : (lesson.speaker_raw ?? 'ללא ייחוס')}{' '}
+          — {lesson.series_name_he}
         </span>
-        <span className="kt-tcell">{lesson.lesson_type}</span>
+        <span className="kt-tcell">
+          {lesson.lesson_type ? (lessonTypeLabel.get(lesson.lesson_type) ?? lesson.lesson_type) : '—'}
+        </span>
         <span className="kt-tcell">{loading ? 'מוריד...' : <CacheStatusBadge status={lesson.cache_status} />}</span>
       </div>
     )
@@ -114,7 +132,7 @@ export function LessonPickerPage() {
           <div className="kt-table">
             <div className="kt-trow kt-trow--head">
               <span className="kt-tcell">כותרת</span>
-              <span className="kt-tcell">רב / סדרה</span>
+              <span className="kt-tcell">דובר / סדרה</span>
               <span className="kt-tcell">סוג</span>
               <span className="kt-tcell">מטמון</span>
             </div>
@@ -127,20 +145,20 @@ export function LessonPickerPage() {
         <h2>בחירת שיעור</h2>
         <div style={{ display: 'flex', gap: 'var(--kt-space-4)', flexWrap: 'wrap' }}>
           <div className="kt-field">
-            <label htmlFor="rabbi-filter">רב</label>
+            <label htmlFor="speaker-filter">דובר</label>
             <select
-              id="rabbi-filter"
-              value={rabbiId ?? ''}
+              id="speaker-filter"
+              value={speakerId ?? ''}
               onChange={(e) => {
                 const next = new URLSearchParams(searchParams)
-                if (e.target.value) next.set('rabbi_id', e.target.value)
-                else next.delete('rabbi_id')
+                if (e.target.value) next.set('speaker_id', e.target.value)
+                else next.delete('speaker_id')
                 next.delete('series_id')
                 setSearchParams(next)
               }}
             >
               <option value="">הכל</option>
-              {rabbis?.map((r) => (
+              {speakers?.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name_he}
                 </option>
@@ -157,10 +175,12 @@ export function LessonPickerPage() {
               <option value="">הכל</option>
               {filteredSeries?.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {/* Disambiguate same-named series from different rabbis (e.g. two
-                      "שאלות ותשובות" series) — redundant once a single rabbi is
+                  {/* Disambiguate same-named series from different speakers (e.g. two
+                      "שאלות ותשובות" series) — redundant once a single speaker is
                       selected, since filteredSeries is already scoped to them. */}
-                  {rabbiId == null ? `${s.name_he} — ${rabbiNameHeById.get(s.rabbi_id) ?? s.rabbi_name_en}` : s.name_he}
+                  {speakerId == null
+                    ? `${s.name_he} — ${s.speakers.map((sp) => sp.name_he).join(' • ') || 'ללא ייחוס'}`
+                    : s.name_he}
                 </option>
               ))}
             </select>
@@ -174,8 +194,8 @@ export function LessonPickerPage() {
             >
               <option value="">הכל</option>
               {lessonTypes.map((t) => (
-                <option key={t} value={t}>
-                  {t}
+                <option key={t.slug} value={t.slug}>
+                  {t.label}
                 </option>
               ))}
             </select>
@@ -197,14 +217,14 @@ export function LessonPickerPage() {
 
       <div className="kt-card">
         <h2>שיעורים {hasFilter ? `(${lessons?.length ?? 0})` : ''}</h2>
-        {!hasFilter && <p className="kt-meta">בחרו רב, סדרה, סוג שיעור או רשימת מזהים כדי להציג שיעורים.</p>}
+        {!hasFilter && <p className="kt-meta">בחרו דובר, סדרה, סוג שיעור או רשימת מזהים כדי להציג שיעורים.</p>}
         {hasFilter && isPending && <p>טוען...</p>}
         {hasFilter && lessons && lessons.length === 0 && <p className="kt-meta">לא נמצאו שיעורים תואמים.</p>}
         {lessons && lessons.length > 0 && (
           <div className="kt-table">
             <div className="kt-trow kt-trow--head">
               <span className="kt-tcell">כותרת</span>
-              <span className="kt-tcell">רב / סדרה</span>
+              <span className="kt-tcell">דובר / סדרה</span>
               <span className="kt-tcell">סוג</span>
               <span className="kt-tcell">מטמון</span>
             </div>
