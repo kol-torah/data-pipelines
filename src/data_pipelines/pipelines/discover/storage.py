@@ -32,11 +32,17 @@ def _client():
 
 
 def storage_key_prefix(series: Series, lesson: Lesson) -> str:
-    """The rabbi/series/external_id part of storage_key, without the format
-    extension. Format isn't known until the file's been probed, so this prefix —
-    not a full key — is what a pre-download bucket check has to search on;
-    external_id is unique within a series, so at most one object can match it."""
-    return f"{series.rabbi.slug}/{series.slug}/{lesson.external_id}"
+    """The series/external_id part of storage_key, without the format extension.
+    Format isn't known until the file's been probed, so this prefix — not a full key —
+    is what a pre-download bucket check has to search on; external_id is unique within a
+    series, so at most one object can match it.
+
+    No speaker component: a series has no single speaker any more, and deriving one from
+    a lesson's speakers is not available either (a lesson may have none). Series slugs
+    are globally unique, so the speaker part was decorative — see
+    documents/plans/catalogue-redesign-plan.md §9, and the one-time re-key script that
+    moved the existing objects onto this convention."""
+    return f"{series.slug}/{lesson.external_id}"
 
 
 @dataclass
@@ -104,7 +110,7 @@ def list_existing_audio(
 
     settings = get_settings()
     client = _client()
-    prefix = f"{series.rabbi.slug}/{series.slug}/"
+    prefix = f"{series.slug}/"
     listed = _list_wanted_objects(client, prefix, wanted)
 
     task = (

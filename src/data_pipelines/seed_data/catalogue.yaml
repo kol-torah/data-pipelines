@@ -1,47 +1,159 @@
-rabbis:
-- slug: rabbi-m-eliyahu
-  name_he: הרב מרדכי אליהו
-  name_en: Mordechai Eliyahu
-  series:
-  - slug: r-eliyaho-q-a
-    name_he: שאלות ותשובות
-    name_en: Q&A
-    lesson_type: Q&A
-    adapter_key: ElyahuQA
-- slug: rabbi-butbul
+speakers:
+- slug: r-butbul
   name_he: הרב אהרון בוטבול
   name_en: Rabbi Aharon Butbul
-  series:
-  - slug: r-butbul-halacha-yomit
-    name_he: הלכה יומית
-    name_en: Daily Halacha
-    lesson_type: Short Lesson
-    adapter_key: ButbulDailyHalacha
-    description_he: סרטוני הלכה יומית
-  - slug: r-butbul-halichot-olam
-    name_he: הליכות עולם
-    name_en: Halichot Olam
-    lesson_type: Q&A
-    adapter_key: ButbulHalichotOlam
-    description_he: תוכנית הרדיו הליכות עולם
-  - slug: r-butbul-sichat-hulin
-    name_he: שיחת חולין של תלמידי חכמים
-    name_en: Informal Talks of Torah Scholars
-    lesson_type: Q&A
-    adapter_key: ButbulSichatHulin
-    description_he: תוכנית הרדיו שיחת חולין של תלמידי חכמים. שאלות בענייני השקפה ואמונה
-  - slug: r-butbul-weekly-ashkelon
-    name_he: השיעור השבועי באשקלון של הרב בוטבול
-    name_en: The Weekly Ashkelon Lesson of Rabbi Butbul
-    lesson_type: Halacha Lesson
-    adapter_key: ButbulWeeklyLessonAshkelon
-    description_he: השיעור השבוע של הרב בוטבול באשקלון
-- slug: rabbi-j-ariel
+- slug: r-j-ariel
   name_he: הרב יעקב אריאל
   name_en: Rabbi Jacob Ariel
-  series:
-  - slug: r-ariel-q-a
-    name_he: שאלות ותשובות
-    name_en: Q&A
-    lesson_type: Q&A
-    adapter_key: ArielQA
+- slug: r-m-eliyahu
+  name_he: הרב מרדכי אליהו
+  name_en: Rabbi Mordechai Eliyahu
+speaker_aliases:
+- name_he: הרב אהרון בוטבול
+  speaker: r-butbul
+- name_he: הרב יעקב אריאל
+  speaker: r-j-ariel
+- name_he: הרב מרדכי אליהו
+  speaker: r-m-eliyahu
+lesson_types:
+- slug: halacha
+  name_he: הלכה
+  name_en: Halacha
+  sort_order: 10
+- slug: gemara
+  name_he: גמרא
+  name_en: Talmud
+  sort_order: 20
+- slug: tanach
+  name_he: תנ"ך
+  name_en: Tanach
+  sort_order: 30
+- slug: parasha
+  name_he: פרשת שבוע
+  name_en: Weekly Parasha
+  sort_order: 40
+- slug: mishna
+  name_he: משנה
+  name_en: Mishna
+  sort_order: 50
+- slug: musar
+  name_he: מוסר
+  name_en: Musar
+  sort_order: 60
+- slug: machshava
+  name_he: מחשבה ואמונה
+  name_en: Jewish Thought
+  sort_order: 70
+- slug: chasidut
+  name_he: חסידות
+  name_en: Chasidut
+  sort_order: 80
+- slug: qa
+  name_he: שאלות ותשובות
+  name_en: Q&A
+  sort_order: 90
+- slug: hadracha
+  name_he: הדרכה ומשפחה
+  name_en: Guidance & Family
+  sort_order: 100
+- slug: moed
+  name_he: מועדים ואירועים
+  name_en: Occasions & Holidays
+  sort_order: 110
+sources:
+- slug: butbul-main
+  name: הרב אהרון בוטבול — הערוץ הראשי
+  platform: youtube
+  external_id: UCS9moGQA0U4MqWzT98mIlGw
+  parser_key: butbul
+- slug: butbul-radio
+  name: הרב אהרון בוטבול — תוכניות רדיו
+  platform: youtube
+  external_id: UCYG1zMLW7s7QTwalxKOLmzw
+  parser_key: butbul
+- slug: harav-org
+  name: harav.org
+  platform: http
+  external_id: https://harav.org/
+  parser_key: eliyahu
+- slug: spreaker-ariel
+  name: שו"ת אהלי יעקב (Spreaker)
+  platform: http
+  external_id: '6821120'
+  parser_key: ariel
+series:
+- slug: r-ariel-q-a
+  name_he: שאלות ותשובות
+  name_en: Q&A
+  lesson_type: qa
+- slug: r-butbul-halacha-yomit
+  name_he: הלכה יומית
+  name_en: Daily Halacha
+  lesson_type: halacha
+  description_he: סרטוני הלכה יומית
+- slug: r-butbul-halichot-olam
+  name_he: הליכות עולם
+  name_en: Halichot Olam
+  lesson_type: qa
+  description_he: תוכנית הרדיו הליכות עולם
+- slug: r-butbul-sichat-hulin
+  name_he: שיחת חולין של תלמידי חכמים
+  name_en: Informal Talks of Torah Scholars
+  lesson_type: qa
+  description_he: תוכנית הרדיו שיחת חולין של תלמידי חכמים. שאלות בענייני השקפה ואמונה
+- slug: r-butbul-weekly-ashkelon
+  name_he: השיעור השבועי באשקלון של הרב בוטבול
+  name_en: The Weekly Ashkelon Lesson of Rabbi Butbul
+  lesson_type: halacha
+  description_he: השיעור השבוע של הרב בוטבול באשקלון
+- slug: r-eliyaho-q-a
+  name_he: שאלות ותשובות
+  name_en: Q&A
+  lesson_type: qa
+ingest_rules:
+- source: spreaker-ariel
+  series: r-ariel-q-a
+  kind: whole_feed
+  config: {}
+  default_speaker: r-j-ariel
+  priority: 100
+  enabled: true
+- source: butbul-main
+  series: r-butbul-halacha-yomit
+  kind: youtube_playlist_prefix
+  config:
+    title_prefix: הלכה יומית
+  default_speaker: r-butbul
+  priority: 100
+  enabled: true
+- source: butbul-radio
+  series: r-butbul-halichot-olam
+  kind: youtube_playlist
+  config:
+    playlist_id: PLPPy6SF11zD8YIS1hqdscDdDPjWcICPPc
+  default_speaker: r-butbul
+  priority: 100
+  enabled: true
+- source: butbul-radio
+  series: r-butbul-sichat-hulin
+  kind: youtube_playlist
+  config:
+    playlist_id: PLPPy6SF11zD_-dW8PU1Br5mPRD8fK91LH
+  default_speaker: r-butbul
+  priority: 110
+  enabled: true
+- source: butbul-main
+  series: r-butbul-weekly-ashkelon
+  kind: youtube_playlist
+  config:
+    playlist_id: PLDOEgolnX2-xOF2aL29beuC8JX-VaaZRs
+  default_speaker: r-butbul
+  priority: 100
+  enabled: true
+- source: harav-org
+  series: r-eliyaho-q-a
+  kind: whole_feed
+  config: {}
+  default_speaker: r-m-eliyahu
+  priority: 100
+  enabled: true
