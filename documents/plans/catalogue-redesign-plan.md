@@ -634,8 +634,8 @@ catalogue must be settled before anything is copied; and the re-key needs the **
 3. **Write the new `catalogue.yaml`** — six flat lists covering the four existing sources,
    the six existing series and their rules, the speakers, aliases and lesson types.
    **Slugs are final at the end of this step**, which is why it precedes the re-key.
-4. **S3 re-key** (one-time script, §9), driven by the settled catalogue rather than a
-   hardcoded rule: for each existing `audio_files` row, map its old key to
+4. **S3 re-key** (`data_pipelines.one_off.rekey_storage`, §9), driven by the settled
+   catalogue rather than a hardcoded rule: for each existing `audio_files` row, map its old key to
    `{new_series_slug}/{external_id}.{ext}` and **server-side copy** it. Verify every object
    landed — byte size and content hash against the row — but **delete nothing yet** (step 7).
    Move the local cache the same way. **Report and skip the known duplicate**: `InDyHd2bKCA`
