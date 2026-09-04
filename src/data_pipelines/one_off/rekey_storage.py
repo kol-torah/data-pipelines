@@ -1,6 +1,6 @@
 """One-time migration: move every stored object onto the new storage-key convention.
 
-Step 4 of documents/plans/catalogue-redesign-plan.md §10. Keys were
+Step 4 of documents/plans/implemented/catalogue-redesign-plan.md §10. Keys were
 `{speaker}/{series}/{external_id}.{ext}` and become `{series}/{external_id}.{ext}` —
 a series no longer has one speaker to name, and deriving one from a lesson's speakers
 isn't available either, since a lesson may have none (§9). Series slugs are globally

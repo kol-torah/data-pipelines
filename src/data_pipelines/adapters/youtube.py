@@ -6,7 +6,7 @@ while the CLI is what they keep stable — so external callers are meant to invo
 subprocess.
 
 Which videos a series gets comes from its `IngestRule`, not from a class constant
-(documents/plans/catalogue-redesign-plan.md §3.5). Two kinds are handled here:
+(documents/plans/implemented/catalogue-redesign-plan.md §3.5). Two kinds are handled here:
 
 - `youtube_playlist` — one playlist id.
 - `youtube_playlist_prefix` — every playlist on the channel whose title starts with a
@@ -150,7 +150,7 @@ def _list_playlist(playlist_id: str) -> list[dict[str, Any]]:
     The flat listing doesn't carry the upload date, so it's fetched separately via the
     Data API — which returns `part=snippet`, meaning the *description* arrives in the
     same call. That is what makes reading a speaker out of the description free
-    (catalogue-redesign-plan.md §4.3, path 3)."""
+    (adding-series-plan.md §2.4) — fetched and attached here, read by nothing yet."""
     result = subprocess.run(
         [
             YT_DLP,

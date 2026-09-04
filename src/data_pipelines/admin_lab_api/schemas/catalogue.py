@@ -49,7 +49,7 @@ class SeriesWrite(BaseModel):
     A series' speakers are derived from its lessons, so there is nothing to write. Its
     source wiring is an `ingest_rules` row, which is created by accepting a surveyed
     playlist rather than by typing an adapter key into a form — see
-    catalogue-redesign-plan.md §6. This form edits what a series *is*: its names, its
+    adding-series-plan.md §4. This form edits what a series *is*: its names, its
     slug, its subject."""
 
     name_he: str

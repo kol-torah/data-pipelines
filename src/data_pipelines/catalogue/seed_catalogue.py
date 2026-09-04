@@ -6,7 +6,7 @@ removed, since deleting a speaker or series can cascade into lessons this script
 nothing about.
 
 That "never deletes" property is what makes **delta files** work
-(documents/plans/catalogue-redesign-plan.md §6.1): a file containing only the rows being
+(documents/plans/implemented/catalogue-redesign-plan.md §6.1): a file containing only the rows being
 added leaves everything else untouched, so curation can proceed a few series at a time
 instead of by hand-merging one large file. The intended loop is *seed a delta, then
 export the whole thing* — the delta records what you decided, the exported

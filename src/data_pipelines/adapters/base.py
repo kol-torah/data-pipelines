@@ -1,4 +1,4 @@
-"""Adapter interface. documents/plans/catalogue-redesign-plan.md §3, §4.
+"""Adapter interface. documents/plans/implemented/catalogue-redesign-plan.md §3, §4.
 
 An adapter is now built per **source** — a channel or a site — not per series. That
 follows from one source feeding many series (Hazon Ovadia: five series, one uploads

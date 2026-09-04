@@ -1,5 +1,5 @@
 """DirectUrlSourceAdapter — shared download() for sources whose discovery ends in a
-direct-download URL. documents/plans/catalogue-redesign-plan.md §3.4 (`platform: http`).
+direct-download URL. documents/plans/implemented/catalogue-redesign-plan.md §3.4 (`platform: http`).
 
 discover() stays abstract: Eliyahu's and Ariel's listings have nothing in common beyond
 "eventually produce a URL", and unlike the YouTube sources they cannot be split into a

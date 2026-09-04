@@ -2,7 +2,7 @@
 
 Keyed on the *source*, not the series: one adapter now serves every series a source
 feeds, because which videos a series gets is an `IngestRule` rather than a class
-constant (documents/plans/catalogue-redesign-plan.md §3.5). Two sources sharing a
+constant (documents/plans/implemented/catalogue-redesign-plan.md §3.5). Two sources sharing a
 `parser_key` — Butbul's two channels — share one class and differ only by their row.
 """
 

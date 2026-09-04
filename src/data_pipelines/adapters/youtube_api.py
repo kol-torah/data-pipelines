@@ -68,7 +68,7 @@ class VideoSnippet:
     The description is kept because it is *already paid for*: the same call that fetches
     `publishedAt` returns it, and it carries the speaker for a large share of the videos
     whose titles omit one — 39 of 50 sampled at Har Etzion, 18 of 50 at Meir
-    (documents/plans/catalogue-redesign-plan.md §1.1). Discarding it, as this module used
+    (documents/plans/implemented/catalogue-redesign-plan.md §1.1). Discarding it, as this module used
     to, meant paying for that information and throwing it away."""
 
     published_at: datetime

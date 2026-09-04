@@ -1,12 +1,23 @@
 # Plan: catalogue redesign — sources, series, and who actually taught the lesson
 
-**Status:** Steps 1-7 **done** (2026-09-03) — schema migrated, catalogue reseeded, S3
-re-keyed, derived data rebuilt from the bucket with zero downloads, old objects deleted.
-Remaining: the lab picker (§7.6), the admin website (§7.5), and the new channels (§7.1-7.4).
-**Survey it depends on:** `documents/pipelines/kolel-channels.md` — every number here comes
-from it.
-**Changes:** `documents/database-schema.md` §2, §3.1, §3.2, §3.3, §4.1, §4.2, §4.4, §5;
-`documents/admin-lab.md` (the catalogue screens §7.5, the lesson picker §7.6).
+**Status: implemented** (2026-09-03/04). The schema (§3), the rule-driven discovery flow
+(§4), the derived-data rule (§5), the storage-key change (§9) and the whole rebuild
+migration (§10) are done, as is the admin/lab rework (§7). Kept here for historical
+context — `documents/database-schema.md` is the durable reference and this file is no
+longer updated as the code evolves.
+
+**Outcome.** 2,210 lessons and 2,208 audio files rebuilt from the bucket with **zero
+lessons lost and 6.8 MB downloaded** (two videos uploaded to YouTube since the previous
+discover run). Every lesson carries a source, a lesson type and a speaker. Two Eliyahu
+lessons remain without audio, as they were before — their harav.org links are dead
+upstream.
+
+**What is *not* here.** Adding new speakers and series — the `title_match` rule kind,
+speaker extraction from titles, `prediscover`, the survey/accept flow, and the four
+surveyed channels — moved to `documents/plans/adding-series-plan.md`, because none of it
+is built. This document is what was.
+
+**Survey it depended on:** `documents/pipelines/kolel-channels.md`.
 
 ---
 
@@ -229,7 +240,8 @@ How a series gets filled. A series may have several; a source serves many.
 | `title_match` | `{speakers: [<slug>], topic?}` | Hazon Ovadia's five series, Or HaChaim's four |
 | `whole_feed` | `{}` | Eliyahu (harav.org), Ariel (Spreaker) |
 
-Every `config` also accepts an optional **`exclude: [pattern, ...]`** — see §4.4.
+A `config` may also carry an optional **`exclude: [pattern, ...]`** — designed, not built;
+`adding-series-plan.md` §2.5.
 
 **All six existing series fit these four kinds** — the test that this abstraction was derived
 from the problem rather than invented for the new channels.
@@ -260,7 +272,8 @@ The factual attribution. Zero rows = nobody identified. Two rows = co-taught.
 - Gains **`speaker_raw`** (text, nullable) — the speaker string exactly as the title or
   description gave it, kept even after resolution. This makes alias curation retroactive:
   add an alias, re-run resolution, and previously-unattributed lessons gain speakers
-  **without re-scraping**. It is also the admin queue's input (§6).
+  **without re-scraping**. It is also the input to the unknown-speaker queue
+(`adding-series-plan.md` §4), which is not built.
 - Unique constraint moves from `(series_id, external_id)` to **`(source_id, external_id)`** —
   one video is one lesson however many rules claim it, so it downloads and transcribes once.
   This is not hypothetical: `InDyHd2bKCA` is stored twice today.
@@ -313,31 +326,16 @@ Four paths, in order:
 3. **The description names someone** → same alias lookup. **This costs nothing** — the
    description is already fetched and discarded today. Noisier than title parsing, so it
    ranks below the rule's own answer.
-4. **None of the above** → zero speaker rows; the lesson is still ingested (§11, decision 1).
+4. **None of the above** → zero speaker rows; the lesson is still ingested.
+
+**Only paths 2 and 4 are exercised today.** The alias lookup in path 1 is written and
+`lessons.speaker_raw` stores what a source said, but no parser sets it yet — the four
+original series all get their speaker from the rule. Path 3 is unbuilt: the description
+is fetched and attached to every entry, and nothing reads it. Both wait on the parsers in
+`adding-series-plan.md` §2.2 and §2.4, and neither needs a schema change when they land.
 
 For `title_match` rules the same lookup does the **routing**: parse → `speaker_raw` →
 alias → speaker → the rule naming that speaker slug claims the lesson. One mechanism, not two.
-
-### 4.4 Excluding non-lessons
-
-Not everything a channel uploads is a lesson. Timetables (`לוז עצמאות תשפו`), ceremonies
-(`tekes honoring olim yoni adler`), fundraising appeals
-(`This #Giving Tuesday - Support Yeshivat Har Etzion!`), promos, songs and live-stream
-placeholders (`שיעורי ערוץ מאיר בשידור חי!`) are **skipped, not ingested unattributed**.
-
-Two layers, because the two kinds of exclusion have different lifetimes:
-
-1. **Per-source defaults, in the parser** (code). Each source's boilerplate is stable and
-   belongs with its parser — Hazon Ovadia's `לו"ז`, `לוח שיעורים`, `שיעורים - <holiday>`;
-   Meir's `שידור חי`; Har Etzion's `tekes`, `Giving Tuesday`, `Ceremony honoring`.
-   These account for nearly all of Hazon Ovadia's 138 unparseable titles.
-2. **Per-rule `exclude` patterns**, in `ingest_rules.config` (data). For the one-off a
-   curator spots after the fact, fixable without a deploy.
-
-A skipped entry is **counted and reported**, never silently dropped — an exclusion pattern
-that quietly eats 400 real lessons is exactly the failure this design is trying to avoid.
-No general heuristic is attempted: "is this a lesson" is not reliably decidable from a title,
-and a wrong guess costs more than a curator's five minutes.
 
 ---
 
@@ -372,23 +370,9 @@ pressure valve is.
 
 ---
 
-## 6. Admin flow
+## 6. Catalogue files
 
-1. **Sources** — add a channel by URL; platform and external id resolved automatically.
-2. **Survey** (`prediscover`) — playlists with item counts, speaker census, playlist
-   coverage, orphan count.
-3. **Accept** — tick the playlists you want. Each becomes a `series` + an `ingest_rule`, with
-   the name and `default_speaker_id` pre-filled from the playlist title for you to correct.
-   This is the review gate that replaces hand-writing 100 YAML entries.
-4. **Unknown speakers queue** — distinct `speaker_raw` values with no alias, by frequency.
-   Map each to an existing speaker, a new one, or "ignore". Resolution then re-runs over the
-   affected lessons; no re-scrape, because `speaker_raw` was kept.
-5. **Discover** runs per source on a schedule.
-
-**A series always starts empty** — created at "accept", populated at the next discovery run.
-Every screen and the `series_speakers` view must tolerate zero rows.
-
-### 6.1 Catalogue files: deltas in, full file out
+### 6.1 Deltas in, full file out
 
 `catalogue.yaml` **reshapes**: series are no longer nested under rabbis, because they no
 longer belong to one. It becomes six flat lists — `speakers`, `speaker_aliases`,
@@ -435,72 +419,13 @@ export after it silently drops the new fields.
 
 ---
 
-## 7. The channels this is for
+## 7. The admin website and the lab
 
-**Import is selective by design.** `ingest_rules.enabled` is per-rule, and nothing is
-ingested until a rule exists. Land the schema, confirm the existing six series rebuild
-identically, then review the surveyed channels and enable series one at a time. Nothing
-below is a commitment to import all of it.
+Both were broken by §3's schema change and both were rewritten. The **series list, series
+form, speaker page, lesson picker and job page** are done; `pyright` and `tsc` are clean
+and the pages were checked in a browser, not merely compiled.
 
-### 7.1 כולל חזון עובדיה — `title_match` rules
-
-One source, one uploads listing, five rules. Routing is by resolved speaker (§4.3), so
-spelling variants live in `speaker_aliases`, not in the rule.
-
-| Speaker | Status | Series slug | Videos | `config` |
-| --- | --- | --- | ---: | --- |
-| הרב אהרון בוטבול | **existing** `r-butbul` | `r-butbul-hazon-ovadia` | 392 | `speakers: [r-butbul]` |
-| הרב אלמוג לוי | new `r-almog-levi` | `r-almog-levi-hazon-ovadia` | 421 | `speakers: [r-almog-levi]` |
-| הרב בנימין חותה | new `r-binyamin-chota` | `r-binyamin-chota-hazon-ovadia` | 422 | `speakers: [r-binyamin-chota]` |
-| הרב יעקב סיני | new `r-yaakov-sinai` | `r-yaakov-sinai-hazon-ovadia` | 131 | `speakers: [r-yaakov-sinai]` |
-| הרב יחיאל גלוכובסקי | new `r-gluchovsky` | `r-gluchovsky-tanya` | 320 | `speakers: [r-gluchovsky], topic: תניא` |
-
-Aliases needed: `אהרן בוטבול` and `אהרון בוטבול` → `r-butbul`.
-
-Parser (`parser_key: hazon_ovadia`), per entry: strip bidi characters and collapse
-whitespace; match a leading honorific; everything up to the first `:` is the speaker (with no
-colon, the first two words, extending past a connector `בן`/`בר`/`הלוי`); the remainder is
-the topic. `title_he` = topic (raw title if empty), `description_he` = raw title,
-`speaker_raw` = the extracted speaker, `recorded_at` = `published_at` — no title on this
-channel carries a date.
-
-### 7.2 אור החיים — `title_match` rules
-
-| Speaker | Series slug | Videos |
-| --- | --- | ---: |
-| הרב ראובן אלבז (new `r-elbaz`) | `r-elbaz-musar-weekly` | 282 |
-| " | `r-elbaz-selichot` | 187 |
-| " | `r-elbaz-tikun` | 48 |
-| " | `r-elbaz-biurim-parasha` | 130 |
-
-Parser (`parser_key: or_hachaim`): split on ` - ` **and** ` – ` — the separator is both ASCII
-hyphen and en-dash, mixed within one channel. First segment is the speaker, second the
-series, third a Hebrew date. Unlike Hazon Ovadia, `hebrew_date.py` applies and `recorded_at`
-can be real.
-
-`ביאורים על פרשת השבוע` names no speaker *in the title*, but every description reads
-`מאת מרן ראש הישיבה הגאון הרב ראובן אלבז` — so its rule needs `default_speaker_id`, since
-the title alone can never say so.
-
-### 7.3 מכון מאיר — `youtube_playlist` rules, no new code
-
-102 rabbi-named playlists are directly usable. Each accepted playlist becomes a `series` plus
-one rule with `default_speaker_id` from the playlist title — **no parser, no adapter class,
-nothing but rows.** The 32 anthology playlists work too: their lessons carry different
-speakers and `series_speakers` returns many rows.
-
-Its 3,583 orphan videos are a title-routed second pass over a playlist-routed channel — not
-this plan.
-
-### 7.4 ישיבת הר עציון — unblocked, not scheduled
-
-Previously deferred because the schema could not express series with no speaker, series with
-25, or co-taught lessons. **The redesign removes that blocker.** What remains is curation —
-which of 561 playlists (median 8 items) are worth having. No rules proposed here.
-
----
-
-### 7.5 The admin website
+### 7.1 The admin website
 
 **The migration breaks the admin lab, and this is not optional work.** Measured:
 
@@ -522,14 +447,15 @@ Types regenerate from OpenAPI; the pages consuming them do not.
 **Straight ports:**
 
 - Rabbis page → **Speakers** page. Same CRUD, new name, `r-` slugs, plus `speaker_aliases`
-  editing — which is what makes the unknown-speakers queue (§6) actionable.
+  editing — which is what will make the unknown-speaker queue actionable
+  (`adding-series-plan.md` §4).
 - Series form: drop `rabbi_id` and `adapter_key`; `lesson_type` becomes a select over
   `lesson_types`.
 - Series list: the `rabbi_name_en` column is now **derived** — read `series_speakers` and
   show the top speaker by `lesson_count`, or "N speakers" for an anthology, or nothing for a
   series with no lessons yet. It can no longer be a single joined field.
 
-**Do not port:** the "create a series by filling in `adapter_key`" form. Under §6 a series is
+**Do not port:** the "create a series by filling in `adapter_key`" form. A series is
 created by accepting a surveyed playlist, which fills in name, source, rule and
 `default_speaker_id` together. Rebuilding the old form first and replacing it later is wasted
 work.
@@ -545,7 +471,7 @@ The lab's own job history is truncated in migration step 5 and lesson ids change
 step 6 verification, not during it.** The pipeline must be provably correct before the UI
 that inspects it is also in flux.
 
-### 7.6 The lab
+### 7.2 The lab
 
 Separate from §7.5 and separately scheduled, because it is the tool you actually run
 experiments with.
@@ -684,23 +610,16 @@ no such risk: all 2,059 videos still resolve.
 
 ---
 
-## 11. Open decisions for you
-
-**None blocking.** The remaining judgement calls are all deferred to catalogue review:
-
-- **Invented names and transliterations** — `בנימין חותה` (the channel spells it with ת in
-  all 421 titles; if `name_he` should use ט, the *matcher* still needs ת) ·
-  `Rabbi Almog Levi` · `Rabbi Binyamin Chota` · `Rabbi Yaakov Sinai` ·
-  `Rabbi Yechiel Gluchovsky` · `Rabbi Reuven Elbaz` · the four Hazon Ovadia halacha series'
-  `name_he`/`name_en`. **You will vet these when reviewing the generated `catalogue.yaml`**,
-  which is the right place — they are data, not design.
-
-## 12. Resolved (was open)
+## 11. Decisions taken
 
 - **`rabbis` → `speakers`**, names carrying their honorific, slugs prefixed `r-`. §3.0, §3.1.
 - **`lesson_type` becomes a side table** with a fixed subject vocabulary, not a free
   string. §3.3.
-- **A series may have no lessons** — it always starts that way. §6.
-- **Non-lessons are excluded, not ingested unattributed.** §4.4.
+- **A series may have no lessons** — it always starts that way. §3.7.
 - **The `lesson_types` vocabulary is agreed** — the eleven rows in §3.3.
 - **Migration is a rebuild, not a transform.** §10.
+- **Non-lessons are excluded rather than ingested unattributed**, and a real lesson nobody
+  named is ingested with no speaker row. Decided here; the mechanism is built with the
+  parsers that need it (`adding-series-plan.md` §2.5).
+- **The invented names** for the surveyed channels' speakers and series were never
+  settled, and travel with the work that needs them (`adding-series-plan.md` §7).

@@ -49,7 +49,7 @@ Three things this shape says, each of which the previous one could not:
   (one kolel channel, five series); a series may draw on several of a source's playlists
   (one per Hebrew year).
 
-Full rationale in `documents/plans/catalogue-redesign-plan.md`.
+Full rationale in `documents/plans/implemented/catalogue-redesign-plan.md`.
 
 ## 3. Tables
 

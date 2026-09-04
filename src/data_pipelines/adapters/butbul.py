@@ -3,7 +3,7 @@
 One adapter serves both sources (`butbul-radio` and `butbul-main`) and all four of his
 series, because they share a `parser_key` — but the four series' title conventions have
 almost nothing in common, so `parse_entry` dispatches on the series slug. That dispatch
-is the concrete form of documents/plans/catalogue-redesign-plan.md §4.2: locations became
+is the concrete form of documents/plans/implemented/catalogue-redesign-plan.md §4.2: locations became
 data, parsing stayed code, and "one parser per source" means one *module*, not one
 regex.
 """

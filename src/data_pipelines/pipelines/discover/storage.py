@@ -40,7 +40,7 @@ def storage_key_prefix(series: Series, lesson: Lesson) -> str:
     No speaker component: a series has no single speaker any more, and deriving one from
     a lesson's speakers is not available either (a lesson may have none). Series slugs
     are globally unique, so the speaker part was decorative — see
-    documents/plans/catalogue-redesign-plan.md §9, and the one-time re-key script that
+    documents/plans/implemented/catalogue-redesign-plan.md §9, and the one-time re-key script that
     moved the existing objects onto this convention."""
     return f"{series.slug}/{lesson.external_id}"
 

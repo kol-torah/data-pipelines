@@ -1,6 +1,7 @@
 # Kolel channels: source survey and taxonomy
 
-**Status:** Survey — the factual input to `documents/plans/catalogue-redesign-plan.md`.
+**Status:** Survey — the factual input to `documents/plans/adding-series-plan.md`, and
+before it to the catalogue redesign that is now implemented.
 **Surveyed:** 2026-09-01, from full `yt-dlp --flat-playlist` listings plus YouTube Data API
 playlist enumeration. Counts are a snapshot; nothing in the pipeline depends on them.
 
@@ -278,6 +279,7 @@ requests `part=snippet` and discards the description, so this costs no extra quo
 
 ## 7. Related documents
 
-- `documents/plans/catalogue-redesign-plan.md` — the plan this survey feeds.
+- `documents/plans/adding-series-plan.md` — the plan this survey now feeds.
+- `documents/plans/implemented/catalogue-redesign-plan.md` — the redesign it fed first.
 - `documents/pipelines/discover.md` — the pipeline these channels plug into.
 - `documents/database-schema.md` §2 — the rabbi→series→lesson shape §5.1 and §6 strain.

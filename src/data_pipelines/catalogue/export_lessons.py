@@ -1,7 +1,7 @@
 """Exports every lesson, with its audio file's identity, to a flat YAML snapshot.
 
 This is the safety net for the catalogue redesign migration
-(documents/plans/catalogue-redesign-plan.md §10): that migration deletes the derived
+(documents/plans/implemented/catalogue-redesign-plan.md §10): that migration deletes the derived
 half of the database and rebuilds it by re-running discover, which is only safe because
 nothing below the catalogue is hand-made. This file is what makes it *reversible* — if a
 lesson fails to come back (a source that stopped listing it, say), its row here still

@@ -1,7 +1,7 @@
 """Shape of the version-controlled catalogue seed file — see export_catalogue.py.
 
 Six flat lists, not series nested under a rabbi: a series no longer belongs to one
-speaker (documents/plans/catalogue-redesign-plan.md §3.7), so the nesting that used to
+speaker (documents/plans/implemented/catalogue-redesign-plan.md §3.7), so the nesting that used to
 express ownership would now be a lie.
 
 Every list defaults to empty so a *delta* file validates — one naming only `series` and
