@@ -131,7 +131,7 @@ export function SpeakersPage() {
             <span className="kt-tcell">שם (עברית)</span>
             <span className="kt-tcell">שם (אנגלית)</span>
             <span className="kt-tcell">Slug</span>
-            <span className="kt-tcell">סדרות</span>
+            <span className="kt-tcell">שיעורים</span>
             <span className="kt-tcell--actions" />
           </div>
           {speakers.map((speaker) =>
