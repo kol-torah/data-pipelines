@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { SourceLink } from '../components/SourceLink'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 import { getSeries, listSeriesLessons, previewResetSeries, resetSeries } from '../api/catalogue'
@@ -88,12 +89,16 @@ export function SeriesDetailPage() {
           <div className="kt-table">
             <div className="kt-trow kt-trow--head">
               <span className="kt-tcell">כותרת</span>
+              <span className="kt-tcell">מקור</span>
               <span className="kt-tcell">אותר בתאריך</span>
               <span className="kt-tcell">סטטוס</span>
             </div>
             {lessons.map((lesson) => (
               <div className="kt-trow" key={lesson.id}>
                 <span className="kt-tcell">{lesson.title_he}</span>
+                <span className="kt-tcell">
+                  <SourceLink url={lesson.url} />
+                </span>
                 <span className="kt-tcell kt-time">{new Date(lesson.discovered_at).toLocaleDateString('he-IL')}</span>
                 <span className="kt-tcell">
                   <LessonStatusBadge status={lesson.status} />

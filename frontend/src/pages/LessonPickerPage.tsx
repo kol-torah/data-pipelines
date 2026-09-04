@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { SourceLink } from '../components/SourceLink'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { listLessonTypes, listSeries, listSpeakers } from '../api/catalogue'
@@ -119,6 +120,9 @@ export function LessonPickerPage() {
         <span className="kt-tcell">
           {lesson.lesson_type ? (lessonTypeLabel.get(lesson.lesson_type) ?? lesson.lesson_type) : '—'}
         </span>
+        <span className="kt-tcell">
+          <SourceLink url={lesson.url} />
+        </span>
         <span className="kt-tcell">{loading ? 'מוריד...' : <CacheStatusBadge status={lesson.cache_status} />}</span>
       </div>
     )
@@ -134,6 +138,7 @@ export function LessonPickerPage() {
               <span className="kt-tcell">כותרת</span>
               <span className="kt-tcell">דובר / סדרה</span>
               <span className="kt-tcell">סוג</span>
+              <span className="kt-tcell">מקור</span>
               <span className="kt-tcell">מטמון</span>
             </div>
             {recentLessons.map(renderLessonRow)}
@@ -226,6 +231,7 @@ export function LessonPickerPage() {
               <span className="kt-tcell">כותרת</span>
               <span className="kt-tcell">דובר / סדרה</span>
               <span className="kt-tcell">סוג</span>
+              <span className="kt-tcell">מקור</span>
               <span className="kt-tcell">מטמון</span>
             </div>
             {lessons.map(renderLessonRow)}

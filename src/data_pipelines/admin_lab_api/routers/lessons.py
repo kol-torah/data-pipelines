@@ -51,6 +51,7 @@ def _lesson_read(lesson: Lesson) -> LabLessonRead:
             for ls in sorted(lesson.speakers, key=lambda x: x.position)
         ],
         speaker_raw=lesson.speaker_raw,
+        url=lesson.url,
         title_he=lesson.title_he,
         title_en=lesson.title_en,
         lesson_type=lesson.lesson_type.slug if lesson.lesson_type is not None else None,

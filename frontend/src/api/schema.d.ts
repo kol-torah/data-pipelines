@@ -468,6 +468,8 @@ export interface components {
             speakers: components["schemas"]["SpeakerBrief"][];
             /** Speaker Raw */
             speaker_raw: string | null;
+            /** Url */
+            url: string;
             /** Title He */
             title_he: string;
             /** Title En */

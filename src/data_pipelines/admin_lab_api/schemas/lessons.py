@@ -34,6 +34,9 @@ class LabLessonRead(BaseModel):
     # `speakers` is empty and the source did name someone; it is what the admin's
     # unknown-speaker queue works from.
     speaker_raw: str | None
+    # Where the lesson came from. A watch page for YouTube; for the HTTP sources it is
+    # the media file itself, since that is all those sources ever expose.
+    url: str
     title_he: str
     title_en: str | None
     lesson_type: str | None
