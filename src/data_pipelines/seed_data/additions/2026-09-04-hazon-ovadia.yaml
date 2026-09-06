@@ -31,7 +31,7 @@ speakers:
   # If the canonical name_he should use ט, change it here — but leave the *alias*
   # below spelled with ת, because that is what the matcher has to match.
   name_he: הרב בנימין חותה
-  name_en: Rabbi Binyamin Chuta       # CHECK — also plausible: Hota, Chuta
+  name_en: Rabbi Binyamin Chuta
 - slug: r-yaakov-sinai
   name_he: הרב יעקב סיני
   name_en: Rabbi Yaakov Sinai         # CHECK
@@ -75,7 +75,7 @@ series:
   lesson_type: halacha
 - slug: r-binyamin-chuta-hazon-ovadia
   name_he: שיעורי ההלכה של הרב בנימין חותה בכולל חזון עובדיה
-  name_en: Halacha Lessons of Rabbi Binyamin chuta at Kolel Hazon Ovadia  # CHECK
+  name_en: Halacha Lessons of Rabbi Binyamin Chuta at Kolel Hazon Ovadia  # CHECK
   lesson_type: halacha
 - slug: r-yaakov-sinai-hazon-ovadia
   # His titles run to הדרכות מעשיות / שאלות מעשיות — practical rulings rather than a

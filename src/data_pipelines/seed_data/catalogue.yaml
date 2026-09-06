@@ -1,20 +1,44 @@
 speakers:
+- slug: r-almog-levi
+  name_he: הרב אלמוג לוי
+  name_en: Rabbi Almog Levi
+- slug: r-binyamin-chuta
+  name_he: הרב בנימין חותה
+  name_en: Rabbi Binyamin Chuta
 - slug: r-butbul
   name_he: הרב אהרון בוטבול
   name_en: Rabbi Aharon Butbul
+- slug: r-gluchovsky
+  name_he: הרב יחיאל גלוכובסקי
+  name_en: Rabbi Yechiel Gluchovsky
 - slug: r-j-ariel
   name_he: הרב יעקב אריאל
   name_en: Rabbi Jacob Ariel
 - slug: r-m-eliyahu
   name_he: הרב מרדכי אליהו
   name_en: Rabbi Mordechai Eliyahu
+- slug: r-yaakov-sinai
+  name_he: הרב יעקב סיני
+  name_en: Rabbi Yaakov Sinai
 speaker_aliases:
+- name_he: אהרון בוטבול
+  speaker: r-butbul
+- name_he: אהרן בוטבול
+  speaker: r-butbul
+- name_he: אלמוג לוי
+  speaker: r-almog-levi
+- name_he: בנימין חותה
+  speaker: r-binyamin-chuta
 - name_he: הרב אהרון בוטבול
   speaker: r-butbul
 - name_he: הרב יעקב אריאל
   speaker: r-j-ariel
 - name_he: הרב מרדכי אליהו
   speaker: r-m-eliyahu
+- name_he: יחיאל גלוכובסקי
+  speaker: r-gluchovsky
+- name_he: יעקב סיני
+  speaker: r-yaakov-sinai
 lesson_types:
 - slug: halacha
   name_he: הלכה
@@ -76,16 +100,29 @@ sources:
   platform: http
   external_id: https://harav.org/
   parser_key: eliyahu
+- slug: hazon-ovadia
+  name: כולל חזון עובדיה
+  platform: youtube
+  external_id: UCn2y_95ph3aCIQ87Fp7Z_0w
+  parser_key: hazon_ovadia
 - slug: spreaker-ariel
   name: שו"ת אהלי יעקב (Spreaker)
   platform: http
   external_id: '6821120'
   parser_key: ariel
 series:
+- slug: r-almog-levi-hazon-ovadia
+  name_he: שיעורי ההלכה של הרב אלמוג לוי בכולל חזון עובדיה
+  name_en: Halacha Lessons of Rabbi Almog Levi at Kolel Hazon Ovadia
+  lesson_type: halacha
 - slug: r-ariel-q-a
   name_he: שאלות ותשובות
   name_en: Q&A
   lesson_type: qa
+- slug: r-binyamin-chuta-hazon-ovadia
+  name_he: שיעורי ההלכה של הרב בנימין חותה בכולל חזון עובדיה
+  name_en: Halacha Lessons of Rabbi Binyamin Chuta at Kolel Hazon Ovadia
+  lesson_type: halacha
 - slug: r-butbul-halacha-yomit
   name_he: הלכה יומית
   name_en: Daily Halacha
@@ -96,6 +133,10 @@ series:
   name_en: Halichot Olam
   lesson_type: qa
   description_he: תוכנית הרדיו הליכות עולם
+- slug: r-butbul-hazon-ovadia
+  name_he: שיעורי ההלכה של הרב אהרון בוטבול בכולל חזון עובדיה
+  name_en: Halacha Lessons of Rabbi Aharon Butbul at Kolel Hazon Ovadia
+  lesson_type: halacha
 - slug: r-butbul-sichat-hulin
   name_he: שיחת חולין של תלמידי חכמים
   name_en: Informal Talks of Torah Scholars
@@ -110,12 +151,36 @@ series:
   name_he: שאלות ותשובות
   name_en: Q&A
   lesson_type: qa
+- slug: r-gluchovsky-tanya
+  name_he: שיעורי תניא של הרב יחיאל גלוכובסקי בכולל חזון עובדיה
+  name_en: Tanya Lessons of Rabbi Yechiel Gluchovsky at Kolel Hazon Ovadia
+  lesson_type: chasidut
+- slug: r-yaakov-sinai-hazon-ovadia
+  name_he: שיעורי ההלכה של הרב יעקב סיני בכולל חזון עובדיה
+  name_en: Halacha Lessons of Rabbi Yaakov Sinai at Kolel Hazon Ovadia
+  lesson_type: halacha
 ingest_rules:
+- source: hazon-ovadia
+  series: r-almog-levi-hazon-ovadia
+  kind: title_match
+  config:
+    speakers:
+    - r-almog-levi
+  priority: 100
+  enabled: true
 - source: spreaker-ariel
   series: r-ariel-q-a
   kind: whole_feed
   config: {}
   default_speaker: r-j-ariel
+  priority: 100
+  enabled: true
+- source: hazon-ovadia
+  series: r-binyamin-chuta-hazon-ovadia
+  kind: title_match
+  config:
+    speakers:
+    - r-binyamin-chuta
   priority: 100
   enabled: true
 - source: butbul-main
@@ -132,6 +197,14 @@ ingest_rules:
   config:
     playlist_id: PLPPy6SF11zD8YIS1hqdscDdDPjWcICPPc
   default_speaker: r-butbul
+  priority: 100
+  enabled: true
+- source: hazon-ovadia
+  series: r-butbul-hazon-ovadia
+  kind: title_match
+  config:
+    speakers:
+    - r-butbul
   priority: 100
   enabled: true
 - source: butbul-radio
@@ -155,5 +228,22 @@ ingest_rules:
   kind: whole_feed
   config: {}
   default_speaker: r-m-eliyahu
+  priority: 100
+  enabled: true
+- source: hazon-ovadia
+  series: r-gluchovsky-tanya
+  kind: title_match
+  config:
+    topic: תניא
+    speakers:
+    - r-gluchovsky
+  priority: 100
+  enabled: true
+- source: hazon-ovadia
+  series: r-yaakov-sinai-hazon-ovadia
+  kind: title_match
+  config:
+    speakers:
+    - r-yaakov-sinai
   priority: 100
   enabled: true
