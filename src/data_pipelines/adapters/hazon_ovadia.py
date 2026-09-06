@@ -36,6 +36,18 @@ _NOT_A_LESSON = re.compile(
 )
 _EDGE_PUNCTUATION_RE = re.compile(r"^[\s:\-–]+|[\s:\-–]+$")
 
+# The same job for the *speaker credit*, and a wider character class — note the `.` and
+# the `,`, which are deliberately absent above. A topic keeps its own punctuation
+# (`title_he` reads `נר שבת- חלק א .`, and every already-stored row looks like that), but
+# a credit cannot: `speaker_raw` is matched against `speaker_aliases` by exact string, so
+# a title written `הרב אהרן בוטבול. : הלכות שבת` yields `אהרן בוטבול.`, matches no alias,
+# and the lesson leaves its rabbi's series with nothing anywhere reporting why. Seven
+# lessons were lost to exactly that on the first Hazon Ovadia run (2026-09-06).
+#
+# Only the colon path needs it. The other branch takes its name from `names.find_speaker`,
+# whose match is Hebrew letters and connectors, so no punctuation can ride along.
+_CREDIT_EDGE_RE = re.compile(r"^[\s.,:\-–]+|[\s.,:\-–]+$")
+
 
 def parse_title(raw_title: str) -> tuple[str | None, str] | None:
     """`(speaker_raw, topic)` for one title, or None when it isn't a lesson.
@@ -63,7 +75,7 @@ def parse_title(raw_title: str) -> tuple[str | None, str] | None:
 
     colon = title.find(":")
     if colon != -1:
-        credit = names.strip_honorific(title[:colon]).strip()
+        credit = _CREDIT_EDGE_RE.sub("", names.strip_honorific(title[:colon]))
         # "everything up to the first colon is the speaker" — the 91% case, and the
         # only reading that gets a long name right: `חיים יוסף דוד אברגל` is four
         # words, and the two-word fallback would file him under `חיים יוסף`.

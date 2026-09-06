@@ -124,6 +124,45 @@ class TestHazonOvadia:
         `speaker_raw`, and no speaker-filtering rule will claim it."""
         assert hazon_ovadia_title("שיעור מיוחד לכבוד החג") == (None, "שיעור מיוחד לכבוד החג")
 
+    @pytest.mark.parametrize(
+        ("title", "expected"),
+        [
+            ("הרב אהרן בוטבול. : הלכות יום טוב", "אהרן בוטבול"),
+            ("הרב אלמוג לוי. : כח התפילה", "אלמוג לוי"),
+            ("הרב בנימין חותה. : הלכות חג הסכות", "בנימין חותה"),
+            # Two faults at once: the typo is real and still needs its own alias row —
+            # the strip only stops the period from hiding it.
+            ("הרב אהרן בטבול. : הלכות מוחק בשבת", "אהרן בטבול"),
+        ],
+    )
+    def test_a_trailing_period_does_not_ride_into_the_name(
+        self, title: str, expected: str
+    ) -> None:
+        """The regression the first Hazon Ovadia run found. `speaker_raw` is matched
+        against `speaker_aliases` by exact string, so `אהרן בוטבול.` matches nothing and
+        the lesson silently leaves its rabbi's series. Seven real lessons were lost this
+        way; all four spellings above are titles this channel actually published."""
+        assert speaker_of(title) == expected
+
+    def test_the_topic_keeps_its_own_punctuation(self) -> None:
+        """The other half of the same fix, and the reason the credit gets its own
+        character class rather than reusing the topic's. Titles on this channel end in
+        ` .` constantly and every `title_he` already stored looks like that — quietly
+        rewriting them would be a worse change than the bug."""
+        assert hazon_ovadia_title("הרב אלמוג לוי. : נר שבת- חלק א .") == (
+            "אלמוג לוי",
+            "נר שבת- חלק א .",
+        )
+
+    def test_a_period_does_not_buy_the_credit_an_extra_word(self) -> None:
+        """The four-word ceiling is what stops a colon placed after the *topic* from
+        being read as a name. A stripped period must not change that count in either
+        direction."""
+        assert hazon_ovadia_title("הרב חיים יוסף דוד אברגל. : דיני תפילה") == (
+            "חיים יוסף דוד אברגל",
+            "דיני תפילה",
+        )
+
 
 class TestOrHaChaim:
     @pytest.mark.parametrize("separator", ["-", "–"])

@@ -21,13 +21,37 @@ speakers:
   name_he: הרב יעקב סיני
   name_en: Rabbi Yaakov Sinai
 speaker_aliases:
+- name_he: אהן בוטבול
+  speaker: r-butbul
+- name_he: אהר בוטבול
+  speaker: r-butbul
+- name_he: אהר בטבול
+  speaker: r-butbul
+- name_he: אהרו בוטבול
+  speaker: r-butbul
 - name_he: אהרון בוטבול
   speaker: r-butbul
 - name_he: אהרן בוטבול
   speaker: r-butbul
+- name_he: אהרן בוטבול.
+  speaker: r-butbul
+- name_he: אהרן בוטבטול
+  speaker: r-butbul
+- name_he: אהרן בטבול
+  speaker: r-butbul
+- name_he: אהרן בטבול.
+  speaker: r-butbul
+- name_he: אלמוג
+  speaker: r-almog-levi
 - name_he: אלמוג לוי
   speaker: r-almog-levi
+- name_he: אלמוג לוי.
+  speaker: r-almog-levi
+- name_he: בנ ימין חותה
+  speaker: r-binyamin-chuta
 - name_he: בנימין חותה
+  speaker: r-binyamin-chuta
+- name_he: בנימין חותה.
   speaker: r-binyamin-chuta
 - name_he: הרב אהרון בוטבול
   speaker: r-butbul
@@ -35,7 +59,25 @@ speaker_aliases:
   speaker: r-j-ariel
 - name_he: הרב מרדכי אליהו
   speaker: r-m-eliyahu
+- name_he: יחאל גלוכובסקי
+  speaker: r-gluchovsky
+- name_he: יחיאיל גלוכובסקי
+  speaker: r-gluchovsky
+- name_he: יחיאל גוכובסקי
+  speaker: r-gluchovsky
+- name_he: יחיאל גולוכובסקי
+  speaker: r-gluchovsky
 - name_he: יחיאל גלוכובסקי
+  speaker: r-gluchovsky
+- name_he: יחיאל גלוכובקי
+  speaker: r-gluchovsky
+- name_he: יחיאל גלוכוובסקי
+  speaker: r-gluchovsky
+- name_he: יחיאל גלוככובסקי
+  speaker: r-gluchovsky
+- name_he: יחיאל גלועובסקי
+  speaker: r-gluchovsky
+- name_he: יחיאל תניא
   speaker: r-gluchovsky
 - name_he: יעקב סיני
   speaker: r-yaakov-sinai
