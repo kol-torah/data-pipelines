@@ -1,0 +1,120 @@
+# כולל חזון עובדיה — five title-routed series.
+# documents/plans/adding-series-plan.md §5.1; counts from kolel-channels.md §3.1.
+#
+# One source, one uploads listing, five rules. Routing is by *resolved* speaker, so
+# every spelling the channel uses is an alias row rather than something in the rule —
+# which is what keeps `אהרן אבוטבול` (6 videos, a different rabbi) out of `r-butbul`.
+#
+# BEFORE SEEDING: every `name_en` below is a transliteration guess, and so are the
+# series names — the channel does not name these series, it just uploads lessons.
+# Correct them here, then:
+#   uv run python -m data_pipelines.catalogue.seed_catalogue \
+#       --input src/data_pipelines/seed_data/additions/2026-09-04-hazon-ovadia.yaml --delta
+#   uv run python -m data_pipelines.catalogue.export_catalogue
+
+# The `sources` row is in 2026-09-04-hazon-ovadia-source.yaml — seed that first, survey
+# the channel, and only then seed this. Defined once, there, so the two cannot drift.
+
+# Every count in this file was re-derived on 2026-09-06 by running the real parser
+# (adapters/hazon_ovadia.py) over the channel's live uploads feed — 4,654 videos, 17
+# rejected as non-lessons, 126 naming no speaker, 288 distinct names. They agree with
+# the census in kolel-channels.md §3.1 to within a handful of videos each, which is the
+# check that matters: the numbers below are what these rules will actually ingest, not
+# what a separate survey script once predicted.
+
+speakers:
+- slug: r-almog-levi
+  name_he: הרב אלמוג לוי
+  name_en: Rabbi Almog Levi          # CHECK
+- slug: r-binyamin-chuta
+  # The channel spells it with ת in all 421 titles; `חוטה` with ט returns zero hits.
+  # If the canonical name_he should use ט, change it here — but leave the *alias*
+  # below spelled with ת, because that is what the matcher has to match.
+  name_he: הרב בנימין חותה
+  name_en: Rabbi Binyamin Chuta       # CHECK — also plausible: Hota, Chuta
+- slug: r-yaakov-sinai
+  name_he: הרב יעקב סיני
+  name_en: Rabbi Yaakov Sinai         # CHECK
+- slug: r-gluchovsky
+  name_he: הרב יחיאל גלוכובסקי
+  name_en: Rabbi Yechiel Gluchovsky   # CHECK — also plausible: Glukhovsky
+
+# `speaker_raw` is the name with the honorific stripped (adapters/names.py), so these
+# are bare names — unlike the aliases already in the catalogue, which come from parsers
+# that keep the honorific. Only the spellings seen ≥2 times in the census are here; the
+# one-off misspellings in kolel-channels.md §3.1's long tail are deliberately left out
+# — they land in the unknown-speaker queue after the first run, where they can be
+# mapped from real data instead of guessed at now.
+speaker_aliases:
+- name_he: אהרן בוטבול
+  speaker: r-butbul
+- name_he: אהרון בוטבול
+  speaker: r-butbul
+- name_he: אלמוג לוי
+  speaker: r-almog-levi
+- name_he: בנימין חותה
+  speaker: r-binyamin-chuta
+- name_he: יעקב סיני
+  speaker: r-yaakov-sinai
+- name_he: יחיאל גלוכובסקי
+  speaker: r-gluchovsky
+
+# The channel names none of these series, so the names are invented. They carry the
+# rabbi's name because a series name is shown next to its speaker but has to stand
+# alone in a list too — and four series called "שיעורי הלכה" would be indistinguishable
+# there. `lesson_type` is not a guess: the live run's topics are הלכות־something almost
+# throughout for the four below, and תניא throughout for the fifth.
+series:
+- slug: r-butbul-hazon-ovadia
+  name_he: שיעורי ההלכה של הרב אהרון בוטבול בכולל חזון עובדיה
+  name_en: Halacha Lessons of Rabbi Aharon Butbul at Kolel Hazon Ovadia   # CHECK
+  lesson_type: halacha
+- slug: r-almog-levi-hazon-ovadia
+  name_he: שיעורי ההלכה של הרב אלמוג לוי בכולל חזון עובדיה
+  name_en: Halacha Lessons of Rabbi Almog Levi at Kolel Hazon Ovadia      # CHECK
+  lesson_type: halacha
+- slug: r-binyamin-chuta-hazon-ovadia
+  name_he: שיעורי ההלכה של הרב בנימין חותה בכולל חזון עובדיה
+  name_en: Halacha Lessons of Rabbi Binyamin chuta at Kolel Hazon Ovadia  # CHECK
+  lesson_type: halacha
+- slug: r-yaakov-sinai-hazon-ovadia
+  # His titles run to הדרכות מעשיות / שאלות מעשיות — practical rulings rather than a
+  # sugya — so `halacha` rather than `qa`, which in this catalogue means a call-in or
+  # question-and-answer format (r-ariel-q-a, r-eliyaho-q-a).
+  name_he: שיעורי ההלכה של הרב יעקב סיני בכולל חזון עובדיה
+  name_en: Halacha Lessons of Rabbi Yaakov Sinai at Kolel Hazon Ovadia    # CHECK
+  lesson_type: halacha
+- slug: r-gluchovsky-tanya
+  name_he: שיעורי תניא של הרב יחיאל גלוכובסקי בכולל חזון עובדיה
+  name_en: Tanya Lessons of Rabbi Yechiel Gluchovsky at Kolel Hazon Ovadia  # CHECK
+  lesson_type: chasidut
+
+ingest_rules:
+# 390 videos on the live run (358 spelled אהרן + 32 אהרון; census said 392).
+- source: hazon-ovadia
+  series: r-butbul-hazon-ovadia
+  kind: title_match
+  config: {speakers: [r-butbul]}
+# 419 videos (census: 421).
+- source: hazon-ovadia
+  series: r-almog-levi-hazon-ovadia
+  kind: title_match
+  config: {speakers: [r-almog-levi]}
+# 421 videos (census: 422).
+- source: hazon-ovadia
+  series: r-binyamin-chuta-hazon-ovadia
+  kind: title_match
+  config: {speakers: [r-binyamin-chuta]}
+# 131 videos, matching the census exactly.
+- source: hazon-ovadia
+  series: r-yaakov-sinai-hazon-ovadia
+  kind: title_match
+  config: {speakers: [r-yaakov-sinai]}
+# 318 of his 331: the other 13 are holiday talks and התוועדות (חג הגאולה, אסון מירון,
+# חנוכה על פי החסידות...), which is why the series is a rabbi *plus* a topic keyword
+# rather than the rabbi alone (§3.3). Dropping those 13 is the intended behaviour — if
+# you want them, they need a second series, not a wider rule.
+- source: hazon-ovadia
+  series: r-gluchovsky-tanya
+  kind: title_match
+  config: {speakers: [r-gluchovsky], topic: תניא}
