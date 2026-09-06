@@ -14,16 +14,30 @@ Run with: uv run python -m data_pipelines.pipelines.discover.s01_discover [serie
 
 import argparse
 from collections import defaultdict
+from dataclasses import dataclass
 
 from rich.progress import Progress
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, selectinload
 
-from data_pipelines.adapters.base import LessonCandidate, SourceAdapter
+from data_pipelines.adapters.base import (
+    LessonCandidate,
+    RuleConfig,
+    SourceAdapter,
+    TitleMatchConfig,
+)
 from data_pipelines.adapters.registry import get_source_adapter
 from data_pipelines.adapters.yt_dlp_cli import warn_if_outdated
 from data_pipelines.config import get_settings
-from data_pipelines.db import IngestRule, Lesson, LessonSpeaker, LessonType, Series, SpeakerAlias
+from data_pipelines.db import (
+    IngestRule,
+    Lesson,
+    LessonSpeaker,
+    LessonType,
+    Series,
+    Speaker,
+    SpeakerAlias,
+)
 from data_pipelines.pipelines.discover.series import series_to_run
 from data_pipelines.pipelines.discover.text import pluralize
 from data_pipelines.progress import make_progress
@@ -52,6 +66,16 @@ def rules_for(session: Session, series_list: list[Series]) -> list[IngestRule]:
     )
 
 
+def resolve_alias(session: Session, speaker_raw: str | None) -> int | None:
+    """The speaker a source's own spelling means, or None if nothing claims it. Exact
+    match on the whole name — never a substring, which is what keeps `אהרן אבוטבול`
+    out of `אהרן בוטבול`'s series (kolel-channels.md §3.2)."""
+    if not speaker_raw:
+        return None
+    alias = session.get(SpeakerAlias, speaker_raw)
+    return alias.speaker_id if alias is not None else None
+
+
 def resolve_speaker_ids(
     session: Session, candidate: LessonCandidate, rule: IngestRule
 ) -> list[int]:
@@ -59,13 +83,61 @@ def resolve_speaker_ids(
     rule knows. A miss leaves `speaker_raw` on the lesson and no speaker row, which is
     what the admin queue reads — adding an alias later re-resolves it without a
     re-scrape."""
-    if candidate.speaker_raw:
-        alias = session.get(SpeakerAlias, candidate.speaker_raw)
-        if alias is not None:
-            return [alias.speaker_id]
+    speaker_id = resolve_alias(session, candidate.speaker_raw)
+    if speaker_id is not None:
+        return [speaker_id]
     if rule.default_speaker_id is not None:
         return [rule.default_speaker_id]
     return []
+
+
+def rule_admits(
+    session: Session, candidate: LessonCandidate, config: RuleConfig, wanted: set[int]
+) -> bool:
+    """Whether a `title_match` rule claims this candidate.
+
+    The half of the kind that cannot live in the adapter: `config.speakers` are slugs,
+    and turning what a title said into a speaker id is what `speaker_aliases` is for —
+    a table the adapter has no session to read. The adapter has already applied
+    everything a title alone can decide (topic, exclusions); this is the routing.
+
+    Deliberately **not** `resolve_speaker_ids`: that falls back to the rule's
+    `default_speaker`, which as a routing answer would mean a rule claiming every
+    unattributed video on a 4,650-video channel. A rule that filters by speaker admits
+    only what the source actually named."""
+    if not isinstance(config, TitleMatchConfig) or not config.speakers:
+        return True
+    speaker_id = resolve_alias(session, candidate.speaker_raw)
+    return speaker_id is not None and speaker_id in wanted
+
+
+def wanted_speaker_ids(session: Session, config: RuleConfig) -> set[int]:
+    """The ids behind a `title_match` rule's speaker slugs, resolved once per rule.
+
+    A slug that names no speaker is an error, not an empty filter: silently admitting
+    nothing would look exactly like a channel that stopped uploading."""
+    if not isinstance(config, TitleMatchConfig) or not config.speakers:
+        return set()
+    found = {
+        speaker.slug: speaker.id
+        for speaker in session.scalars(select(Speaker).where(Speaker.slug.in_(config.speakers)))
+    }
+    missing = sorted(set(config.speakers) - found.keys())
+    if missing:
+        raise ValueError(f"rule names unknown speaker slugs: {', '.join(missing)}")
+    return set(found.values())
+
+
+@dataclass
+class RuleOutcome:
+    """What one rule did this run. `unrouted` is only ever non-zero for `title_match`,
+    and is the number the plan cares about most: a rule that suddenly admits nothing on
+    a channel that is still uploading means an alias broke, not that the rabbi stopped
+    teaching."""
+
+    new: int = 0
+    already_known: int = 0
+    unrouted: int = 0
 
 
 def discover_for_rule(
@@ -74,22 +146,29 @@ def discover_for_rule(
     adapter: SourceAdapter,
     known_external_ids: set[str],
     lesson_type_ids: dict[str, int],
+    config: RuleConfig,
+    wanted: set[int],
     *,
     progress: Progress | None = None,
-) -> tuple[int, int]:
-    """Insert what this rule sees and isn't already known for its source. Returns
-    (new, skipped-because-already-known)."""
+) -> RuleOutcome:
+    """Insert what this rule sees, claims, and doesn't already have for its source.
+
+    `config` and `wanted` are resolved by the caller rather than here, so that a rule
+    the catalogue has mis-wired is rejected before anything is listed — and rejected on
+    its own, without taking the night's other rules down with it."""
     series = rule.series
-    new_count = 0
-    skipped = 0
+    outcome = RuleOutcome()
     # The per-source known set doubles as the hint an expensive source uses to skip
     # per-item fetches (SourceAdapter.discover) — passed as a snapshot, since it is
     # mutated below as new ids are claimed.
     for candidate in adapter.discover(
         rule, series, known_external_ids=frozenset(known_external_ids), progress=progress
     ):
+        if not rule_admits(session, candidate, config, wanted):
+            outcome.unrouted += 1
+            continue
         if candidate.external_id in known_external_ids:
-            skipped += 1
+            outcome.already_known += 1
             continue
         known_external_ids.add(candidate.external_id)
         lesson = Lesson(
@@ -114,8 +193,8 @@ def discover_for_rule(
             session.add(
                 LessonSpeaker(lesson_id=lesson.id, speaker_id=speaker_id, position=position)
             )
-        new_count += 1
-    return new_count, skipped
+        outcome.new += 1
+    return outcome
 
 
 def discover_all(session: Session, series_list: list[Series]) -> None:
@@ -153,13 +232,34 @@ def discover_all(session: Session, series_list: list[Series]) -> None:
             )
             for rule in source_rules:
                 progress.update(task, description=f"Discovering [bold]{rule.series.slug}[/]")
-                new_count, skipped = discover_for_rule(
-                    session, rule, adapter, known, lesson_type_ids, progress=progress
+                try:
+                    config = adapter.rule_config(rule)
+                    wanted = wanted_speaker_ids(session, config)
+                except ValueError as exc:
+                    # Same reasoning as an unregistered `parser_key` above: a
+                    # half-built catalogue is the normal state while channels are being
+                    # onboarded, and one mis-wired rule should cost its own series, not
+                    # everything else scheduled behind it.
+                    progress.console.print(f"{rule.series.slug}: {exc} — skipping rule")
+                    progress.advance(task)
+                    continue
+                outcome = discover_for_rule(
+                    session,
+                    rule,
+                    adapter,
+                    known,
+                    lesson_type_ids,
+                    config,
+                    wanted,
+                    progress=progress,
                 )
                 session.commit()
+                unrouted = (
+                    f", {outcome.unrouted} not this rule's speakers" if outcome.unrouted else ""
+                )
                 progress.console.print(
-                    f"{rule.series.slug}: {skipped} already known, "
-                    f"{pluralize(new_count, 'new lesson')}"
+                    f"{rule.series.slug}: {outcome.already_known} already known"
+                    f"{unrouted}, {pluralize(outcome.new, 'new lesson')}"
                 )
                 progress.advance(task)
 

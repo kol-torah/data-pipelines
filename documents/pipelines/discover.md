@@ -97,6 +97,47 @@ uv run python -m data_pipelines.pipelines.discover.s01_discover               # 
 uv run python -m data_pipelines.pipelines.discover.s01_discover <series-slug> # one series
 ```
 
+### 3.1 Rule kinds, and which half of the system decides each
+
+Four kinds exist. Three are answered entirely at the source — a playlist id, a title
+prefix, a whole feed — and live in the adapter. The fourth does not.
+
+| Kind | Config | What it lists |
+| --- | --- | --- |
+| `youtube_playlist` | `playlist_id` | one playlist |
+| `youtube_playlist_prefix` | `title_prefix` | every playlist on the channel whose title starts with it |
+| `whole_feed` | *(none)* | the source's own listing |
+| `title_match` | `speakers`, `topic`, `exclude` | the channel's uploads feed, sliced by what each title says |
+
+`title_match` (`adapters/base.py`, `adding-series-plan.md` §2.1) exists for a channel
+whose playlists are vestigial — כולל חזון עובדיה's three cover 145 of 4,650 videos — so
+the uploads feed is the only complete listing and the series boundary is *who is
+speaking* rather than where the video sits.
+
+**It is the one kind decided in two places, and that split is deliberate.** `topic` and
+`exclude` are facts about a title, so `YouTubeSourceAdapter._discover_title_match`
+applies them. `speakers` are **speaker slugs matched after alias resolution** — turning
+`אהרן בוטבול` into a speaker id is what the `speaker_aliases` table is for, and the
+adapter has no session to read it with. So the routing lives in `s01_discover.rule_admits`,
+next to `resolve_speaker_ids`, and the adapter hands the pipeline one candidate per
+plausible lesson rather than one per video on the channel.
+
+Two consequences worth knowing before writing such a rule:
+
+- **Routing never falls back to `default_speaker`.** A rule that filters by speaker
+  admits only what the *source actually named*; the fallback would have it claim every
+  unattributed video on the channel. A series whose titles name nobody therefore uses an
+  empty `speakers` with a `topic` — `ביאורים על פרשת השבוע` is exactly that — and gets
+  its attribution from `default_speaker` after the fact.
+- **One listing per source per run.** Five rules over one 4,650-video channel must not
+  mean five listings. `discover_all` builds one adapter per source and reuses it, and
+  `YouTubeSourceAdapter.list_uploads` memoizes on that instance.
+
+Skips are counted and reported at every layer — a parser's own boilerplate rules (`לו"ז`,
+live-stream placeholders), a rule's `exclude` patterns, and candidates no rule claimed.
+An exclusion that quietly eats 400 real lessons is the failure this design is built to
+make visible (§2.5).
+
 ---
 
 ## 4. Stage 2 — Download (`s02_download.py`)
@@ -315,7 +356,39 @@ series' lessons at once.
 
 ---
 
-## 8. Where things live
+## 8. Surveying a new source (`prediscover.py`)
+
+```bash
+uv run python -m data_pipelines.pipelines.discover.prediscover <source-slug>
+```
+
+Reads a source, writes `documents/pipelines/sources/<source>.proposal.yaml`, and touches
+nothing else — not the database, not the catalogue. **Run rarely**: when a source is
+added or revisited, never as part of `run.py`. It lists every playlist on the channel,
+which for ישיבת הר עציון is 561 yt-dlp invocations.
+
+Which of מכון מאיר's 170 playlists are worth having is a judgement call; enumerating
+them, counting them and guessing at the speaker is mechanical, and that split is the
+whole argument for the step (`adding-series-plan.md` §3). What it always reports:
+
+- videos in **no** playlist — 48.7% of מכון מאיר
+- playlists whose title yields no speaker
+- playlists below a size floor (5 items)
+- **census names that contain another census name** — `אבוטבול` contains `בוטבול`,
+  `לוינשטיין` contains `לוי`, and each pair is two different rabbis
+- **slug collisions** — א and ע carry no consonant, so `אהרן בוטבול` and
+  `אהרן אבוטבול` transliterate identically. The second gets a suffix and a marker;
+  seeding them under one slug would merge two men without an error.
+
+The output is **a draft of a delta file, not a replacement for the catalogue.** You read
+it, delete the 80% you don't want, fix every transliteration — all of them are guesses
+from a letter-for-letter table — and seed what's left into
+`src/data_pipelines/seed_data/additions/`. A re-run rewrites the proposal and can never
+clobber your edits, because they live somewhere else.
+
+---
+
+## 9. Where things live
 
 | What                         | Where                                                           | Notes                                                                                                                                                                                                   |
 | ---------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -326,7 +399,7 @@ series' lessons at once.
 
 ---
 
-## 9. Related documents
+## 10. Related documents
 
 - `documents/design.md` — overall pipeline shape (§2.1) and the deterministic/
   experimental split this pipeline sits inside.
@@ -335,3 +408,7 @@ series' lessons at once.
   storage-key convention (§4.2).
 - `documents/plans/adapters-plan.md` — the adapter interface (`discover()` /
   `download()`) stage 1 and 2 call into.
+- `documents/plans/adding-series-plan.md` — the `title_match` kind, the `prediscover`
+  step, and the four kolel channels they were built for.
+- `documents/pipelines/kolel-channels.md` — the survey every count above comes from,
+  and §3.2's name traps, which are the unit tests in `tests/test_title_parsing.py`.

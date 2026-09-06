@@ -10,12 +10,29 @@ from data_pipelines.adapters.ariel import ArielSourceAdapter
 from data_pipelines.adapters.base import SourceAdapter
 from data_pipelines.adapters.butbul import ButbulSourceAdapter
 from data_pipelines.adapters.eliyahu import ElyahuSourceAdapter
+from data_pipelines.adapters.generic_youtube import GenericYouTubeSourceAdapter
+from data_pipelines.adapters.hazon_ovadia import HazonOvadiaSourceAdapter
+from data_pipelines.adapters.or_hachaim import OrHaChaimSourceAdapter
 from data_pipelines.db import Source
 
 SOURCE_ADAPTERS: dict[str, type[SourceAdapter]] = {
     "butbul": ButbulSourceAdapter,
     "eliyahu": ElyahuSourceAdapter,
     "ariel": ArielSourceAdapter,
+    "hazon_ovadia": HazonOvadiaSourceAdapter,
+    "or_hachaim": OrHaChaimSourceAdapter,
+    # Not bespoke, and the only entry here that is meant to be shared: a channel whose
+    # rules already know the speaker needs no parser of its own, so pointing it here is
+    # what makes its series pure catalogue rows (generic_youtube.py).
+    #
+    # Registered under both spellings deliberately. It is the only key a curator types
+    # from memory rather than copies from an existing row, and it is also the only
+    # multi-word one — so it is the only one where a slip between `-` and `_` is
+    # plausible. Since an unknown `parser_key` skips the whole source with nothing but a
+    # console line (get_source_adapter), that slip would look like a channel that had
+    # stopped uploading.
+    "generic-youtube": GenericYouTubeSourceAdapter,
+    "generic_youtube": GenericYouTubeSourceAdapter,
 }
 
 

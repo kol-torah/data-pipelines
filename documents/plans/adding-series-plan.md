@@ -1,13 +1,24 @@
 # Plan: adding new speakers and series
 
-**Status:** Planned — not yet implemented.
+**Status:** Steps 1–4 of §6 implemented (2026-09-04); steps 5–7 outstanding.
+**Built:** the channel-uploads listing and `generic-youtube` parser (§2.3), the
+`title_match` kind and speaker extraction (§2.1, §2.2), both title-routed parsers
+(§5.1, §5.2), per-source and per-rule exclusions (§2.5), and `prediscover` (§3).
+`documents/pipelines/discover.md` §3.1 and §8 are the durable reference for all of it.
+**Not built:** description reading (§2.4), מכון מאיר's rows (§5.3 — needs a curated
+`prediscover` run), הר עציון (§5.4), and the admin screens of §4, which were deliberately
+left for a later plan: the CLI writes a proposal YAML and a delta is hand-edited, so the
+review gate exists without a frontend. The unknown-speaker **queue** of §4.4 is therefore
+still `SELECT DISTINCT speaker_raw ... WHERE no alias`, not a screen.
 **Depends on:** `documents/plans/implemented/catalogue-redesign-plan.md`, which built the
 schema this relies on (`sources`, `ingest_rules`, `speakers`, `lesson_speakers`), and
 `documents/pipelines/kolel-channels.md`, which surveyed the four channels below.
-**Code to touch:** new `adapters/sources/{hazon_ovadia,or_hachaim}.py`, new
-`pipelines/discover/prediscover.py`, `adapters/base.py` (a `title_match` kind),
-`adapters/youtube.py` (channel-uploads listing), `seed_data/catalogue.yaml` and
-`seed_data/additions/`. Documentation: `documents/admin-lab.md`.
+**Code as built:** `adapters/names.py` (shared name extraction), `adapters/{hazon_ovadia,
+or_hachaim,generic_youtube}.py`, `pipelines/discover/prediscover.py`, `adapters/base.py`
+(the `title_match` kind), `adapters/youtube.py` (channel-uploads listing and the per-run
+cache), `pipelines/discover/s01_discover.py` (speaker routing),
+`seed_data/additions/2026-09-04-{hazon-ovadia,or-hachaim}.yaml`,
+`tests/test_title_parsing.py`. Documentation: `documents/pipelines/discover.md` §3.1, §8.
 
 The redesign made *where lessons come from* into data: a `series` is filled by one or
 more `ingest_rules`, each naming a source and a kind. Adding a series is therefore a

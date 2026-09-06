@@ -21,6 +21,10 @@ API_BASE = "https://www.googleapis.com/youtube/v3"
 class PlaylistInfo:
     id: str
     title: str
+    # From `contentDetails`, which the same call returns: what a survey needs to say
+    # "165 of these 561 playlists have fewer than 5 items" without listing any of them
+    # (adding-series-plan.md §3). Callers that only match titles ignore it.
+    item_count: int = 0
 
 
 def resolve_channel_id(handle: str) -> str:
@@ -44,7 +48,7 @@ def list_channel_playlists(channel_id: str) -> Iterator[PlaylistInfo]:
     page_token: str | None = None
     while True:
         params = {
-            "part": "snippet",
+            "part": "snippet,contentDetails",
             "channelId": channel_id,
             "maxResults": 50,
             "key": get_settings().youtube_api_key.get_secret_value(),
@@ -55,7 +59,11 @@ def list_channel_playlists(channel_id: str) -> Iterator[PlaylistInfo]:
         response.raise_for_status()
         data = response.json()
         for item in data["items"]:
-            yield PlaylistInfo(id=item["id"], title=item["snippet"]["title"])
+            yield PlaylistInfo(
+                id=item["id"],
+                title=item["snippet"]["title"],
+                item_count=item.get("contentDetails", {}).get("itemCount", 0),
+            )
         page_token = data.get("nextPageToken")
         if not page_token:
             return

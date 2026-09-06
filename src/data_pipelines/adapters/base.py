@@ -11,6 +11,7 @@ takes the rule that says *what to list* and the series that gives *parsing conte
 rather than reading both off `self`.
 """
 
+import re
 from abc import ABC, abstractmethod
 from collections.abc import Iterator, Mapping
 from collections.abc import Set as AbstractSet
@@ -18,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import ClassVar
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 from rich.progress import Progress
 
 from data_pipelines.db.models import IngestRule, Lesson, Series, Source
@@ -57,6 +58,54 @@ KIND_WHOLE_FEED = "whole_feed"
 class WholeFeedConfig(RuleConfig):
     """`whole_feed`: the source's own listing is the series, so there is nothing to
     configure. Declared rather than skipped so a stray key is still rejected."""
+
+
+KIND_TITLE_MATCH = "title_match"
+
+
+class TitleMatchConfig(RuleConfig):
+    """`title_match`: the series is a slice of the source's whole listing, cut by who
+    the title says is speaking (adding-series-plan.md §2.1).
+
+    For a channel whose playlists are vestigial — Hazon Ovadia's three cover 145 of
+    4,650 videos — the uploads feed is the only complete listing, and the series
+    boundary is a fact about each video rather than a location at the source.
+
+    `speakers` are **speaker slugs, matched after alias resolution**, which is why the
+    filter cannot live in the adapter: only the pipeline has the alias table. See
+    `s01_discover.rule_admits`. Empty means "don't filter by speaker" — for a series
+    whose titles name nobody and whose rule carries a `default_speaker` instead.
+
+    `topic` is a plain substring of the title, not a pattern: Gluchovsky's תניא series
+    is 320 of his 333 videos, and `רבי plus a keyword` is what separates it from the
+    holiday talks. `exclude` *is* a list of regexes — the per-rule half of §2.5, for the
+    non-lesson a curator spots after the fact without waiting for a deploy."""
+
+    speakers: list[str] = []
+    topic: str | None = None
+    exclude: list[str] = []
+
+    @field_validator("exclude")
+    @classmethod
+    def _compilable(cls, patterns: list[str]) -> list[str]:
+        """Rejected at rule-load time rather than at the first title it is tried on: a
+        rule that cannot be evaluated should stop the run, not fail 3,000 videos in."""
+        for pattern in patterns:
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                raise ValueError(f"exclude pattern {pattern!r} is not a valid regex: {exc}")
+        return patterns
+
+    def excludes(self, title: str) -> bool:
+        return any(re.search(pattern, title) for pattern in self.exclude)
+
+    def admits_title(self, title: str) -> bool:
+        """Everything this rule can decide without the database — the speaker filter is
+        the pipeline's half."""
+        if self.excludes(title):
+            return False
+        return self.topic is None or self.topic in title
 
 
 class SourceAdapter(ABC):
