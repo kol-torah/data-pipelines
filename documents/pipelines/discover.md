@@ -158,12 +158,11 @@ catalogue restored from migrations/seed, but discovered lessons and their
 ever deletes from, still has everything already uploaded from a prior run.
 
 The check is a prefix search, not an exact key lookup: `storage_key` embeds
-`format` (`{rabbi_slug}/{series_slug}/{external_id}.{format}`), but `format` is
-only known after a file has been downloaded and probed — a chicken-and-egg problem
-for a check that has to happen *before* downloading. Since `external_id` is unique
-within a series, listing everything under `{rabbi_slug}/{series_slug}/` and
-matching by filename (ignoring the extension) finds the object regardless of what
-format it happened to be stored in.
+`format` (`{series_slug}/{external_id}.{format}`), but `format` is only known after
+a file has been downloaded and probed — a chicken-and-egg problem for a check that
+has to happen *before* downloading. Since `external_id` is unique within a series,
+listing everything under `{series_slug}/` and matching by filename (ignoring the
+extension) finds the object regardless of what format it happened to be stored in.
 
 The check is scoped to lessons that actually need one. Reading an object's custom
 metadata costs a `HEAD` round-trip per object — the listing itself is cheap, the
@@ -281,8 +280,8 @@ same completion signal stage 2 writes, read the other way round.
 
 For each pending lesson:
 
-1. Build `storage_key = {rabbi_slug}/{series_slug}/{external_id}.{format}` (format
-   taken from the staged file's extension) and move the file from staging into its
+1. Build `storage_key = {series_slug}/{external_id}.{format}` (format taken from
+   the staged file's extension) and move the file from staging into its
    final local-cache position, `{cache_root}/{storage_key}` (`database-schema.md`
    §4.2) — skipped if a file is already sitting at that path (see "Interruption
    safety" below).

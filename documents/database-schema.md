@@ -324,15 +324,22 @@ So "one parser per source" means one *module*, not one regex.
 ### 4.2 Storage key shared between bucket and local cache
 
 `audio_files.storage_key` is a path fragment like
-`{rabbi_slug}/{series_slug}/{external_id}.{format}` — persisted once at store time, not
-re-derived on demand. The bucket URI and local cache path are both built by prepending
-the appropriate root to this same fragment:
+`{series_slug}/{external_id}.{format}` — persisted once at store time, not re-derived on
+demand. There is **no speaker component**: the catalogue redesign removed the single
+`rabbi` a series used to have, and deriving one from a lesson's speakers is not an
+option because a lesson may have none. Series slugs are globally unique, so the
+component was decorative anyway — see
+`documents/plans/implemented/catalogue-redesign-plan.md` §9, which changed the
+convention, and the one-time script that re-keyed the objects already in the bucket.
+
+The bucket URI and local cache path are both built by prepending the appropriate root
+to this same fragment:
 
 - Bucket: `s3://{bucket}/{storage_key}`
 - Local cache: `{cache_root}/{storage_key}`
 
-Persisting the key (rather than recomputing it from the current rabbi/series slugs each
-time) means a later rename doesn't silently move where an already-stored lesson's audio
+Persisting the key (rather than recomputing it from the series' current slug each time)
+means a later rename doesn't silently move where an already-stored lesson's audio
 lives. It also keeps the column provider-neutral: a future move from S3 to GCS (an open
 question in design.md §9) changes only how the bucket root is constructed, not this
 table.
