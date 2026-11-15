@@ -17,6 +17,9 @@ speakers:
 - slug: r-m-eliyahu
   name_he: הרב מרדכי אליהו
   name_en: Rabbi Mordechai Eliyahu
+- slug: r-rosenblum
+  name_he: הרב ברוך רוזנבלום
+  name_en: Rabbi Baruch Rosenblum
 - slug: r-yaakov-sinai
   name_he: הרב יעקב סיני
   name_en: Rabbi Yaakov Sinai
@@ -53,6 +56,8 @@ speaker_aliases:
   speaker: r-binyamin-chuta
 - name_he: בנימין חותה.
   speaker: r-binyamin-chuta
+- name_he: ברוך רוזנבלום
+  speaker: r-rosenblum
 - name_he: הרב אהרון בוטבול
   speaker: r-butbul
 - name_he: הרב יעקב אריאל
@@ -147,6 +152,11 @@ sources:
   platform: youtube
   external_id: UCn2y_95ph3aCIQ87Fp7Z_0w
   parser_key: hazon_ovadia
+- slug: rosenblum
+  name: הרב ברוך רוזנבלום — ברוך שאמר
+  platform: youtube
+  external_id: UCJ3fCI2FnNMEeU2y-TcdU4Q
+  parser_key: generic-youtube
 - slug: spreaker-ariel
   name: שו"ת אהלי יעקב (Spreaker)
   platform: http
@@ -197,6 +207,12 @@ series:
   name_he: שיעורי תניא של הרב יחיאל גלוכובסקי בכולל חזון עובדיה
   name_en: Tanya Lessons of Rabbi Yechiel Gluchovsky at Kolel Hazon Ovadia
   lesson_type: chasidut
+- slug: r-rosenblum-parasha
+  name_he: פרשת השבוע והמועדים
+  name_en: Weekly Parasha and Holidays
+  lesson_type: parasha
+  description_he: שיעורי פרשת השבוע ודרשות החגים של הרב ברוך רוזנבלום, באלעד ובבני
+    ברק
 - slug: r-yaakov-sinai-hazon-ovadia
   name_he: שיעורי ההלכה של הרב יעקב סיני בכולל חזון עובדיה
   name_en: Halacha Lessons of Rabbi Yaakov Sinai at Kolel Hazon Ovadia
@@ -279,6 +295,14 @@ ingest_rules:
     topic: תניא
     speakers:
     - r-gluchovsky
+  priority: 100
+  enabled: true
+- source: rosenblum
+  series: r-rosenblum-parasha
+  kind: youtube_playlist
+  config:
+    playlist_id: PLY778oWR4b_XhQDhL-MUP3dGuS88FEy5K
+  default_speaker: r-rosenblum
   priority: 100
   enabled: true
 - source: hazon-ovadia

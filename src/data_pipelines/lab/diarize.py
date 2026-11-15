@@ -3,9 +3,11 @@
 
 import time
 
-import soundfile as sf
 import torch
 from pyannote.audio import Pipeline
+# torchcodec's documented public import path; its __init__ re-exports without
+# __all__, so pyright reads it as private.
+from torchcodec.decoders import AudioDecoder  # type: ignore[attr-defined]
 
 from data_pipelines.config import get_settings
 from data_pipelines.lab.job import LabJob
@@ -15,8 +17,11 @@ from data_pipelines.lab.models import DiarizationParams, DiarizationResult, Diar
 class DiarizeJob(LabJob[DiarizationParams, DiarizationResult]):
     key = "diarize"
     description = "Speaker diarization via ivrit.ai pyannote fine-tune"
-    version = "1"
-    version_notes = "Initial version: pipeline defaults (AgglomerativeClustering, no manual threshold tuning)."
+    version = "2"
+    version_notes = (
+        "Audio decoded with torchcodec instead of soundfile, which can't read m4a/AAC; "
+        "downmixed to mono before diarizing. Pipeline defaults otherwise unchanged."
+    )
 
     @classmethod
     def params_model(cls) -> type[DiarizationParams]:
@@ -43,8 +48,17 @@ class DiarizeJob(LabJob[DiarizationParams, DiarizationResult]):
         # formats (mp3/opus) — pyannote's own crop() then raises on the mismatch.
         # A preloaded waveform sidesteps that entirely (the library's own documented
         # workaround, pyannote/audio/core/io.py's AudioFileDocString).
-        data, sample_rate = sf.read(str(audio_path), dtype="float32", always_2d=True)
-        waveform = torch.from_numpy(data.T)  # (channel, time), what pyannote expects
+        #
+        # Decoded with torchcodec rather than soundfile: libsndfile can't read m4a
+        # (AAC), and the catalogue has some. A full decode has no duration-probe
+        # problem — the mismatch above is between the container's *declared* length
+        # and the samples, and here there is only the samples.
+        samples = AudioDecoder(str(audio_path)).get_all_samples()
+        # (channel, time). Downmixed here rather than left to pyannote (which would
+        # average the channels too): some m4a files are 6-channel 48 kHz, and an hour
+        # of that is several GB of float32 before pyannote gets to it.
+        waveform = samples.data.mean(dim=0, keepdim=True)
+        sample_rate = samples.sample_rate
         start = time.monotonic()
         output = pipeline({"waveform": waveform, "sample_rate": sample_rate})
         elapsed_s = time.monotonic() - start
