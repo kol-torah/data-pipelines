@@ -1,47 +1,315 @@
-rabbis:
-- slug: rabbi-m-eliyahu
-  name_he: הרב מרדכי אליהו
-  name_en: Mordechai Eliyahu
-  series:
-  - slug: r-eliyaho-q-a
-    name_he: שאלות ותשובות
-    name_en: Q&A
-    lesson_type: Q&A
-    adapter_key: ElyahuQA
-- slug: rabbi-butbul
+speakers:
+- slug: r-almog-levi
+  name_he: הרב אלמוג לוי
+  name_en: Rabbi Almog Levi
+- slug: r-binyamin-chuta
+  name_he: הרב בנימין חותה
+  name_en: Rabbi Binyamin Chuta
+- slug: r-butbul
   name_he: הרב אהרון בוטבול
   name_en: Rabbi Aharon Butbul
-  series:
-  - slug: r-butbul-halacha-yomit
-    name_he: הלכה יומית
-    name_en: Daily Halacha
-    lesson_type: Short Lesson
-    adapter_key: ButbulDailyHalacha
-    description_he: סרטוני הלכה יומית
-  - slug: r-butbul-halichot-olam
-    name_he: הליכות עולם
-    name_en: Halichot Olam
-    lesson_type: Q&A
-    adapter_key: ButbulHalichotOlam
-    description_he: תוכנית הרדיו הליכות עולם
-  - slug: r-butbul-sichat-hulin
-    name_he: שיחת חולין של תלמידי חכמים
-    name_en: Informal Talks of Torah Scholars
-    lesson_type: Q&A
-    adapter_key: ButbulSichatHulin
-    description_he: תוכנית הרדיו שיחת חולין של תלמידי חכמים. שאלות בענייני השקפה ואמונה
-  - slug: r-butbul-weekly-ashkelon
-    name_he: השיעור השבועי באשקלון של הרב בוטבול
-    name_en: The Weekly Ashkelon Lesson of Rabbi Butbul
-    lesson_type: Halacha Lesson
-    adapter_key: ButbulWeeklyLessonAshkelon
-    description_he: השיעור השבוע של הרב בוטבול באשקלון
-- slug: rabbi-j-ariel
+- slug: r-gluchovsky
+  name_he: הרב יחיאל גלוכובסקי
+  name_en: Rabbi Yechiel Gluchovsky
+- slug: r-j-ariel
   name_he: הרב יעקב אריאל
   name_en: Rabbi Jacob Ariel
-  series:
-  - slug: r-ariel-q-a
-    name_he: שאלות ותשובות
-    name_en: Q&A
-    lesson_type: Q&A
-    adapter_key: ArielQA
+- slug: r-m-eliyahu
+  name_he: הרב מרדכי אליהו
+  name_en: Rabbi Mordechai Eliyahu
+- slug: r-rosenblum
+  name_he: הרב ברוך רוזנבלום
+  name_en: Rabbi Baruch Rosenblum
+- slug: r-yaakov-sinai
+  name_he: הרב יעקב סיני
+  name_en: Rabbi Yaakov Sinai
+speaker_aliases:
+- name_he: אהן בוטבול
+  speaker: r-butbul
+- name_he: אהר בוטבול
+  speaker: r-butbul
+- name_he: אהר בטבול
+  speaker: r-butbul
+- name_he: אהרו בוטבול
+  speaker: r-butbul
+- name_he: אהרון בוטבול
+  speaker: r-butbul
+- name_he: אהרן בוטבול
+  speaker: r-butbul
+- name_he: אהרן בוטבול.
+  speaker: r-butbul
+- name_he: אהרן בוטבטול
+  speaker: r-butbul
+- name_he: אהרן בטבול
+  speaker: r-butbul
+- name_he: אהרן בטבול.
+  speaker: r-butbul
+- name_he: אלמוג
+  speaker: r-almog-levi
+- name_he: אלמוג לוי
+  speaker: r-almog-levi
+- name_he: אלמוג לוי.
+  speaker: r-almog-levi
+- name_he: בנ ימין חותה
+  speaker: r-binyamin-chuta
+- name_he: בנימין חותה
+  speaker: r-binyamin-chuta
+- name_he: בנימין חותה.
+  speaker: r-binyamin-chuta
+- name_he: ברוך רוזנבלום
+  speaker: r-rosenblum
+- name_he: הרב אהרון בוטבול
+  speaker: r-butbul
+- name_he: הרב יעקב אריאל
+  speaker: r-j-ariel
+- name_he: הרב מרדכי אליהו
+  speaker: r-m-eliyahu
+- name_he: יחאל גלוכובסקי
+  speaker: r-gluchovsky
+- name_he: יחיאיל גלוכובסקי
+  speaker: r-gluchovsky
+- name_he: יחיאל גוכובסקי
+  speaker: r-gluchovsky
+- name_he: יחיאל גולוכובסקי
+  speaker: r-gluchovsky
+- name_he: יחיאל גלוכובסקי
+  speaker: r-gluchovsky
+- name_he: יחיאל גלוכובקי
+  speaker: r-gluchovsky
+- name_he: יחיאל גלוכוובסקי
+  speaker: r-gluchovsky
+- name_he: יחיאל גלוככובסקי
+  speaker: r-gluchovsky
+- name_he: יחיאל גלועובסקי
+  speaker: r-gluchovsky
+- name_he: יחיאל תניא
+  speaker: r-gluchovsky
+- name_he: יעקב סיני
+  speaker: r-yaakov-sinai
+lesson_types:
+- slug: halacha
+  name_he: הלכה
+  name_en: Halacha
+  sort_order: 10
+- slug: gemara
+  name_he: גמרא
+  name_en: Talmud
+  sort_order: 20
+- slug: tanach
+  name_he: תנ"ך
+  name_en: Tanach
+  sort_order: 30
+- slug: parasha
+  name_he: פרשת שבוע
+  name_en: Weekly Parasha
+  sort_order: 40
+- slug: mishna
+  name_he: משנה
+  name_en: Mishna
+  sort_order: 50
+- slug: musar
+  name_he: מוסר
+  name_en: Musar
+  sort_order: 60
+- slug: machshava
+  name_he: מחשבה ואמונה
+  name_en: Jewish Thought
+  sort_order: 70
+- slug: chasidut
+  name_he: חסידות
+  name_en: Chasidut
+  sort_order: 80
+- slug: qa
+  name_he: שאלות ותשובות
+  name_en: Q&A
+  sort_order: 90
+- slug: hadracha
+  name_he: הדרכה ומשפחה
+  name_en: Guidance & Family
+  sort_order: 100
+- slug: moed
+  name_he: מועדים ואירועים
+  name_en: Occasions & Holidays
+  sort_order: 110
+sources:
+- slug: butbul-main
+  name: הרב אהרון בוטבול — הערוץ הראשי
+  platform: youtube
+  external_id: UCS9moGQA0U4MqWzT98mIlGw
+  parser_key: butbul
+- slug: butbul-radio
+  name: הרב אהרון בוטבול — תוכניות רדיו
+  platform: youtube
+  external_id: UCYG1zMLW7s7QTwalxKOLmzw
+  parser_key: butbul
+- slug: harav-org
+  name: harav.org
+  platform: http
+  external_id: https://harav.org/
+  parser_key: eliyahu
+- slug: hazon-ovadia
+  name: כולל חזון עובדיה
+  platform: youtube
+  external_id: UCn2y_95ph3aCIQ87Fp7Z_0w
+  parser_key: hazon_ovadia
+- slug: rosenblum
+  name: הרב ברוך רוזנבלום — ברוך שאמר
+  platform: youtube
+  external_id: UCJ3fCI2FnNMEeU2y-TcdU4Q
+  parser_key: generic-youtube
+- slug: spreaker-ariel
+  name: שו"ת אהלי יעקב (Spreaker)
+  platform: http
+  external_id: '6821120'
+  parser_key: ariel
+series:
+- slug: r-almog-levi-hazon-ovadia
+  name_he: שיעורי ההלכה של הרב אלמוג לוי בכולל חזון עובדיה
+  name_en: Halacha Lessons of Rabbi Almog Levi at Kolel Hazon Ovadia
+  lesson_type: halacha
+- slug: r-ariel-q-a
+  name_he: שאלות ותשובות
+  name_en: Q&A
+  lesson_type: qa
+- slug: r-binyamin-chuta-hazon-ovadia
+  name_he: שיעורי ההלכה של הרב בנימין חותה בכולל חזון עובדיה
+  name_en: Halacha Lessons of Rabbi Binyamin Chuta at Kolel Hazon Ovadia
+  lesson_type: halacha
+- slug: r-butbul-halacha-yomit
+  name_he: הלכה יומית
+  name_en: Daily Halacha
+  lesson_type: halacha
+  description_he: סרטוני הלכה יומית
+- slug: r-butbul-halichot-olam
+  name_he: הליכות עולם
+  name_en: Halichot Olam
+  lesson_type: qa
+  description_he: תוכנית הרדיו הליכות עולם
+- slug: r-butbul-hazon-ovadia
+  name_he: שיעורי ההלכה של הרב אהרון בוטבול בכולל חזון עובדיה
+  name_en: Halacha Lessons of Rabbi Aharon Butbul at Kolel Hazon Ovadia
+  lesson_type: halacha
+- slug: r-butbul-sichat-hulin
+  name_he: שיחת חולין של תלמידי חכמים
+  name_en: Informal Talks of Torah Scholars
+  lesson_type: qa
+  description_he: תוכנית הרדיו שיחת חולין של תלמידי חכמים. שאלות בענייני השקפה ואמונה
+- slug: r-butbul-weekly-ashkelon
+  name_he: השיעור השבועי באשקלון של הרב בוטבול
+  name_en: The Weekly Ashkelon Lesson of Rabbi Butbul
+  lesson_type: halacha
+  description_he: השיעור השבוע של הרב בוטבול באשקלון
+- slug: r-eliyaho-q-a
+  name_he: שאלות ותשובות
+  name_en: Q&A
+  lesson_type: qa
+- slug: r-gluchovsky-tanya
+  name_he: שיעורי תניא של הרב יחיאל גלוכובסקי בכולל חזון עובדיה
+  name_en: Tanya Lessons of Rabbi Yechiel Gluchovsky at Kolel Hazon Ovadia
+  lesson_type: chasidut
+- slug: r-rosenblum-parasha
+  name_he: פרשת השבוע והמועדים
+  name_en: Weekly Parasha and Holidays
+  lesson_type: parasha
+  description_he: שיעורי פרשת השבוע ודרשות החגים של הרב ברוך רוזנבלום, באלעד ובבני
+    ברק
+- slug: r-yaakov-sinai-hazon-ovadia
+  name_he: שיעורי ההלכה של הרב יעקב סיני בכולל חזון עובדיה
+  name_en: Halacha Lessons of Rabbi Yaakov Sinai at Kolel Hazon Ovadia
+  lesson_type: halacha
+ingest_rules:
+- source: hazon-ovadia
+  series: r-almog-levi-hazon-ovadia
+  kind: title_match
+  config:
+    speakers:
+    - r-almog-levi
+  priority: 100
+  enabled: true
+- source: spreaker-ariel
+  series: r-ariel-q-a
+  kind: whole_feed
+  config: {}
+  default_speaker: r-j-ariel
+  priority: 100
+  enabled: true
+- source: hazon-ovadia
+  series: r-binyamin-chuta-hazon-ovadia
+  kind: title_match
+  config:
+    speakers:
+    - r-binyamin-chuta
+  priority: 100
+  enabled: true
+- source: butbul-main
+  series: r-butbul-halacha-yomit
+  kind: youtube_playlist_prefix
+  config:
+    title_prefix: הלכה יומית
+  default_speaker: r-butbul
+  priority: 100
+  enabled: true
+- source: butbul-radio
+  series: r-butbul-halichot-olam
+  kind: youtube_playlist
+  config:
+    playlist_id: PLPPy6SF11zD8YIS1hqdscDdDPjWcICPPc
+  default_speaker: r-butbul
+  priority: 100
+  enabled: true
+- source: hazon-ovadia
+  series: r-butbul-hazon-ovadia
+  kind: title_match
+  config:
+    speakers:
+    - r-butbul
+  priority: 100
+  enabled: true
+- source: butbul-radio
+  series: r-butbul-sichat-hulin
+  kind: youtube_playlist
+  config:
+    playlist_id: PLPPy6SF11zD_-dW8PU1Br5mPRD8fK91LH
+  default_speaker: r-butbul
+  priority: 110
+  enabled: true
+- source: butbul-main
+  series: r-butbul-weekly-ashkelon
+  kind: youtube_playlist
+  config:
+    playlist_id: PLDOEgolnX2-xOF2aL29beuC8JX-VaaZRs
+  default_speaker: r-butbul
+  priority: 100
+  enabled: true
+- source: harav-org
+  series: r-eliyaho-q-a
+  kind: whole_feed
+  config: {}
+  default_speaker: r-m-eliyahu
+  priority: 100
+  enabled: true
+- source: hazon-ovadia
+  series: r-gluchovsky-tanya
+  kind: title_match
+  config:
+    topic: תניא
+    speakers:
+    - r-gluchovsky
+  priority: 100
+  enabled: true
+- source: rosenblum
+  series: r-rosenblum-parasha
+  kind: youtube_playlist
+  config:
+    playlist_id: PLY778oWR4b_XhQDhL-MUP3dGuS88FEy5K
+  default_speaker: r-rosenblum
+  priority: 100
+  enabled: true
+- source: hazon-ovadia
+  series: r-yaakov-sinai-hazon-ovadia
+  kind: title_match
+  config:
+    speakers:
+    - r-yaakov-sinai
+  priority: 100
+  enabled: true

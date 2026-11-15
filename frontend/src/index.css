@@ -1,0 +1,8 @@
+/* Fonts load here, not from base.css (see the note at the top of that file): CSS
+   requires @import to be the first rule in the stylesheet, and once concatenated
+   after "tailwindcss" it no longer would be. */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+Hebrew:wght@400;500;700&family=Heebo:wght@300;400;500;700&family=JetBrains+Mono:wght@400&display=swap');
+@import "tailwindcss";
+@import "./styles/kt/tokens.css";
+@import "./styles/kt/base.css";
+@import "./styles/kt/admin.css";

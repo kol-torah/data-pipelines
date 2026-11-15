@@ -15,8 +15,8 @@ passed through unmodified), and that reason should be a comment at the point of 
 left implicit.
 
 This applies to every function signature, not just data models — including a helper
-whose parameter is a value from a library (e.g. a Streamlit widget's return value, a
-SQLAlchemy row). An untyped parameter is exactly the case where a type checker can't
+whose parameter is a value from a library (e.g. a SQLAlchemy row, a LiteLLM response
+object). An untyped parameter is exactly the case where a type checker can't
 catch a mismatch between how you're using a value and what it actually is — annotate
 against the library's real return type rather than leaving it implicit, and run the
 project's type checker (`pyright`) before considering a change finished.
@@ -47,8 +47,9 @@ This repo (`data-pipelines`) lives alongside sibling repos under `~/src/kol-tora
 tier's design (React Router SSR + Django/django-ninja + django-allauth OIDC) lives in
 `../documentation/design/web-architecture.md`, not in this repo — don't confuse that
 "admin panel" (the public site's staff CMS, a different stack) with this repo's own
-Streamlit admin tool (`src/data_pipelines/admin_app.py`), which is a separate, internal
-tool with its own doc at `documents/admin.md`.
+admin/lab tool (`frontend/` + `src/data_pipelines/admin_lab_api/` and
+`src/data_pipelines/lab/`), which is a separate, internal tool with its own doc at
+`documents/admin-lab.md`.
 
 ## Before reporting a task finished
 

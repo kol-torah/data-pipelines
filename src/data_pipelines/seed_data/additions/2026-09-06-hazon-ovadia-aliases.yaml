@@ -1,0 +1,103 @@
+# כולל חזון עובדיה — the misspellings the first discovery run left unrouted.
+#
+# After the 2026-09-06 run ingested 1,679 lessons, a sweep of the channel's speaker
+# census found 24 more videos that are plainly one of the five chosen rabbis but whose
+# `speaker_raw` matched no alias: uploader typos, a stray space, a swallowed letter, a
+# trailing period. Each was confirmed by reading its topic — every Butbul below is
+# halacha, every Gluchovsky below is תניא — not by spelling similarity alone.
+#
+# Adding an alias is retroactive by design for lessons already in the database, but
+# these were never inserted: a `title_match` rule that does not claim a candidate
+# creates no row, so there is nothing here to re-resolve. **Discovery has to run again
+# to pick these up** — it will list the channel afresh, and the ~24 will insert as new.
+#
+#   uv run python -m data_pipelines.catalogue.seed_catalogue \
+#       --input src/data_pipelines/seed_data/additions/2026-09-06-hazon-ovadia-aliases.yaml --delta
+#   uv run python -m data_pipelines.catalogue.export_catalogue
+#   uv run python -m data_pipelines.pipelines.discover.s01_discover
+#
+# NOT added, deliberately — these are different men who share a surname, and the whole
+# point of matching whole names rather than substrings (kolel-channels.md §3.2) is to
+# keep them out:
+#   עובדיה יוסף בוטבול (29) · אהרן אבוטבול (6) · יוסף עובדיה בוטבול (1)
+#   שמואל גלוכובסקי (6) · שניאור גלוכובסקי (2) · מנחם מנדל גלוכובסקי (1)
+# The last three also teach תניא, so topic is no help in telling them apart — only the
+# name is.
+#
+# ALSO NOT added, because they are ambiguous rather than wrong:
+#   בוטבול הלכות (1) · בוטבול תפילה (1)
+# Both are titles whose name/topic boundary broke, leaving a bare surname. With two
+# different Butbuls on this channel there is nothing in the string to say which one it
+# is, and guessing would file a lesson under the wrong rabbi — a quieter error than
+# leaving it out. Watch the videos if the two are worth recovering.
+
+speaker_aliases:
+
+# --- הרב אהרון בוטבול · 8 videos -------------------------------------------------
+# The trailing-period forms were a parser artefact, not a spelling: the topic had its
+# edge punctuation stripped while the speaker credit was only whitespace-trimmed, so
+# `הרב אהרן בוטבול. : ...` yielded `אהרן בוטבול.`. **That was fixed the same day**
+# (`_CREDIT_EDGE_RE`, hazon_ovadia.py), so these four rows no longer catch anything and
+# are kept only as a net in case a credit ever picks up punctuation by some other route.
+# `אהרן בטבול` (no period) is a different matter and must stay: that one is a real
+# misspelling, which the fix merely un-masks.
+- name_he: אהרן בוטבול.
+  speaker: r-butbul
+- name_he: אהרן בטבול.
+  speaker: r-butbul
+- name_he: אהרן בטבול
+  speaker: r-butbul
+- name_he: אהרן בוטבטול
+  speaker: r-butbul
+- name_he: אהרו בוטבול
+  speaker: r-butbul
+- name_he: אהר בוטבול
+  speaker: r-butbul
+- name_he: אהר בטבול
+  speaker: r-butbul
+- name_he: אהן בוטבול
+  speaker: r-butbul
+
+# --- הרב אלמוג לוי · 4 videos ----------------------------------------------------
+# `אלמוג` alone is safe here where a bare `בוטבול` is not: he is the only אלמוג in a
+# 288-name census.
+- name_he: אלמוג לוי.
+  speaker: r-almog-levi
+- name_he: אלמוג
+  speaker: r-almog-levi
+
+# --- הרב בנימין חותה · 2 videos --------------------------------------------------
+- name_he: בנימין חותה.
+  speaker: r-binyamin-chuta
+- name_he: בנ ימין חותה
+  speaker: r-binyamin-chuta
+
+# --- הרב יחיאל גלוכובסקי · 10 videos ---------------------------------------------
+# All ten are תניא lessons, so all ten pass `r-gluchovsky-tanya`'s topic filter. The
+# surname is long and the typos are all in its middle — a reminder that the alias table,
+# not a fuzzy matcher, is where this belongs: `שמואל`/`שניאור`/`מנחם מנדל גלוכובסקי`
+# are within one edit of some of these and are three other people.
+- name_he: יחיאל גוכובסקי
+  speaker: r-gluchovsky
+- name_he: יחיאל גלועובסקי
+  speaker: r-gluchovsky
+- name_he: יחיאל גלוככובסקי
+  speaker: r-gluchovsky
+- name_he: יחיאל גלוכוובסקי
+  speaker: r-gluchovsky
+- name_he: יחיאל גלוכובקי
+  speaker: r-gluchovsky
+- name_he: יחיאל גולוכובסקי
+  speaker: r-gluchovsky
+- name_he: יחיאיל גלוכובסקי
+  speaker: r-gluchovsky
+- name_he: יחאל גלוכובסקי
+  speaker: r-gluchovsky
+# The name/topic boundary broke and swallowed the surname into the topic word. The
+# lesson is חסידות and its raw title still contains תניא, so the rule admits it.
+- name_he: יחיאל תניא
+  speaker: r-gluchovsky
+
+# --- הרב יעקב סיני · none --------------------------------------------------------
+# No variants: all 131 of his titles spell him identically. The near neighbours the
+# sweep turned up — יעקב שכנזי (4), יעקב לייפר (1) — are other rabbis.

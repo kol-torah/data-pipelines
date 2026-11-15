@@ -1,12 +1,14 @@
 # Kol Torah — Admin & Lab
 
-**Status:** Draft for review — not yet built
-**Last updated:** 2026-08-12
-**Code:** `frontend/` (React, planned) + `src/data_pipelines/lab/` and
-`src/data_pipelines/admin_lab_api/` (Python, planned)
+**Status:** Implemented — first version built and in use (build plan:
+`documents/plans/implemented/admin-lab-plan.md`)
+**Last updated:** 2026-08-17
+**Code:** `frontend/` (React) + `src/data_pipelines/lab/` and
+`src/data_pipelines/admin_lab_api/` (Python)
 
-Supersedes `admin.md` (the Streamlit admin app) and the Streamlit/Chainlit stack
-decisions in `design.md` §8.2 — see §1.2–§1.4.
+Replaced the Streamlit admin app, which has been **removed** from the codebase —
+`admin.md` is now a tombstone, not a spec of anything that exists. Also supersedes the
+Streamlit/Chainlit stack decisions in `design.md` §8.2 — see §1.2–§1.4.
 
 ---
 
@@ -60,9 +62,9 @@ the existing `public` schema (`rabbis`/`series`/`lessons`/`audio_files`/...). `l
 other constraint. There is no seeding step: the lesson picker (§2) queries
 `public.lessons` directly, live, filtered rather than copied.
 
-**This is a pending change to `design.md` §7.1/§7.3, not yet made there** — `design.md`
-still documents the two-database design as of this writing. Revisit once a real
-production environment exists separate from this dev database; at that point the
+**`design.md` §7.1/§7.3 have already been updated to match this** — this section states
+the reasoning behind that revision, not a change still pending elsewhere. Revisit once a
+real production environment exists separate from this dev database; at that point the
 isolation §7.1 was designed for becomes a real requirement again, and the two-database
 split (or some other boundary) is worth reinstating.
 
@@ -115,8 +117,10 @@ downloading the whole file first. Streamlit's own media serving handled this int
 in the version this replaces; a hand-rolled API needs to do it explicitly.
 
 `design.md` §8.2's other stack decision — Chainlit for the not-yet-started agentic
-search prototype — isn't addressed by this change. Worth revisiting for consistency once
-`design.md` is actually updated, not decided here.
+search prototype — isn't addressed by this change, and `design.md` (already updated to
+reflect React for the lab, per §1.1) leaves it explicitly open there too: whether
+Chainlit is still the right call now that the lab itself is React. Worth revisiting for
+consistency once that prototype work actually starts, not decided here.
 
 ### 1.3 Revises `design.md` G8 — no auth for now
 
@@ -126,15 +130,21 @@ this runs locally, for one operator, so there's nothing to authenticate against.
 is built for now. Revisit alongside §1.1 once there's an actual shared/hosted deployment
 of this tool, not before.
 
-### 1.4 Supersedes `admin.md` and `admin_app.py`
+### 1.4 Replaced `admin.md` and `admin_app.py` — both now gone
 
-The existing Streamlit admin app (`src/data_pipelines/admin_app.py`, specced in
-`admin.md`) — rabbi/series CRUD, lesson browsing — is dropped, not kept alongside this.
-Its functionality moves into this app instead, as ordinary CRUD screens over the same
-catalogue tables. This lets an operator go from "here's a lesson in the catalogue" to
-"run a transcription job on it" to "here are the results" without switching apps.
-`admin.md` becomes stale once this lands; retiring or rewriting it is a follow-up, not
-done as part of this document.
+**Done, not planned.** The Streamlit admin app — rabbi/series CRUD, lesson browsing —
+was dropped rather than kept alongside this one. `src/data_pipelines/admin_app.py` is
+deleted, `streamlit` is out of `pyproject.toml`, and the editor launch config and
+port-forward entry for it (`.vscode/`, port 8501) are gone too; there is no Streamlit
+anywhere in this repo. `admin.md` was rewritten as a short "removed, here's what
+replaced it" tombstone, so older cross-references still resolve without sending a reader
+looking for code that no longer exists.
+
+Its functionality lives here instead, as ordinary CRUD screens over the same catalogue
+tables (`frontend/src/pages/{RabbisPage,SeriesPage,SeriesDetailPage}.tsx` over
+`admin_lab_api/routers/catalogue.py`). This lets an operator go from "here's a lesson in
+the catalogue" to "run a transcription job on it" to "here are the results" without
+switching apps.
 
 ### 1.5 Job execution stays a direct subprocess per click
 
@@ -150,8 +160,10 @@ see §4.3. Unaffected by the React/backend split in §1.2: the backend API proce
 ## 2. What this version does
 
 - **Lesson picker.** Queries `public.lessons` directly (§1.1) — no seeding step.
-  Filterable by rabbi, series, content type, or an explicit lesson-id list (`design.md`
-  §8.4's selection axes, applied live rather than copied), with local-cache status shown
+  Filterable by rabbi, series, `lesson_type` (`database-schema.md` §4.4 — the actual
+  column name; `design.md` §8.4 calls this selection axis "content type" in prose, but
+  there is no `content_type` column), or an explicit lesson-id list (`design.md` §8.4's
+  selection axes, applied live rather than copied), with local-cache status shown
   per row. Picking a lesson that's stored but not cached locally downloads it from the
   bucket on the spot (§4.6); a lesson with no `audio_files` row yet (not stored) is shown
   but disabled — there's no audio to run on.
@@ -160,15 +172,21 @@ see §4.3. Unaffected by the React/backend split in §1.2: the backend API proce
   a launch button — this is what makes a page refresh safe (§4.3).
 - **Live status.** Polls `lab_jobs` (§5.1) on a short interval; per-job status, timing,
   and (once done) results appear without a full page reload.
-- **Results view.** Transcript segments and diarization turns as two synced, clickable
-  lists sharing one continuously-playing audio player — clicking a row seeks playback to
-  that timestamp instantly, with the currently-playing segment highlighted as playback
-  moves past it. Not merged (§1); side by side is enough to eyeball how well the two
-  agree. Each diarization turn gets **two cues, not one**: a colour for host/not-host
-  (a heuristic, computed client-side — see §4.7) and the raw speaker label
-  (`SPEAKER_00`, `SPEAKER_03`, ...) as text alongside it. Diarization quality itself is
-  still unknown at this point — showing both is what lets an operator tell whether the
-  heuristic is right by checking it against the raw labels, not just trust it.
+- **Results view — one to four transcription runs side by side.** Clickable, virtualized
+  columns sharing one continuously-playing audio player: clicking a row in any column
+  seeks playback instantly, and the currently-playing segment highlights as playback
+  moves past it. A run picker chooses which runs to show (§4.10); with a single run
+  selected this is an ordinary transcript view, which is the common case.
+- **Speaker tagging as a lens, not a comparison.** One diarization run is selected —
+  newest by default, `ללא` to turn it off — and applied to *every* transcript column, so
+  each segment carries a chip reading `מנחה` or `שואל N`, with the raw `SPEAKER_00`-style
+  label as the chip's tooltip. Because all columns share one diarization, the same
+  speaker is the same colour in every column by construction. Two diarizations are never
+  compared against each other; the merge job (§5.3) is still what decides host-vs-asker
+  (§4.7), and the display path for it computes on demand without recording a run.
+- **Transcript search.** Find a phrase inside the lesson on screen — matches are marked
+  inline, with a counter and next/previous that scroll the list to each occurrence
+  (§4.9). Within one lesson only; there is no catalogue-wide search.
 - **Log view.** The captured stdout/stderr of any completed job (success or failure), in
   a collapsed-by-default panel (§4.5).
 - **Catalogue admin.** Rabbi/series/lesson CRUD, carried over from `admin_app.py` (§1.4).
@@ -180,12 +198,13 @@ see §4.3. Unaffected by the React/backend split in §1.2: the backend API proce
   single click, and tracking N jobs at once, isn't built. Nothing in the data model
   blocks this later (`design.md` notes the lab is never expected to run over more than a
   few dozen lessons anyway).
-- The merge job type (§5.3).
-- **Run comparison view** — pick two `lab_jobs` rows for a lesson, diff params and
-  segments side by side. Needed, not optional: `design.md` §8.2's whole stated reason
-  for the lab existing is "which of these configurations is best across these lessons,"
-  which is a comparison question by definition. Sequenced after v1 only because it needs
-  a second run of the same job type to exist before there's anything to compare.
+- ~~The merge job type (§5.3).~~ **Built** — see §5.3; the results view above describes
+  what it changed.
+- **Catalogue-wide transcript search** — §4.9's search covers one lesson at a time.
+- ~~**Run comparison view**~~ — **built**, see §4.10. `design.md` §8.2's whole stated
+  reason for the lab existing is "which of these configurations is best across these
+  lessons," which is a comparison question by definition; it was sequenced after v1 only
+  because a second run of the same job type had to exist first.
 - Ground-truth transcripts / WER measurement.
 - Live log streaming while a job runs (§4.5).
 - The UI-prototyping gallery's actual content (§1) — its existence shapes the stack
@@ -199,7 +218,7 @@ see §4.3. Unaffected by the React/backend split in §1.2: the backend API proce
 flowchart TD
     REACT["React frontend\n(frontend/)"] -->|"HTTP"| API["Backend API\n(admin_lab_api/)"]
     API -->|"Popen"| RUNNER["run_job.py <job_id>\n(subprocess)"]
-    API -->|"insert, status=running, pid"| JOBS[("lab.lab_jobs")]
+    API -->|"insert, status=running,\npid=null; then update pid"| JOBS[("lab.lab_jobs")]
     RUNNER -->|"reads params, lesson_id"| JOBS
     RUNNER --> DISPATCH{"JOB_TYPES[job_type]"}
     DISPATCH --> TRANSCRIBE["TranscribeJob.run()"]
@@ -289,13 +308,27 @@ difference between job types to dispatch one.
 
 ### 4.2 Params and results: typed, not `dict[str, Any]`
 
-Per `CLAUDE.md`, both are Pydantic models, one pair per job type:
+Per `CLAUDE.md`, both are Pydantic models, one pair per job type. Every job type's
+params model shares one field via a common base, so `lab_jobs.model_id` (§5.1) can be
+populated generically — reading `params.model_id` off whichever `ParamsT` came back from
+validation, with no per-job-type branching to know where the model identifier lives:
 
-- `TranscriptionParams` (model variant, beam size, `initial_prompt`, ...),
+```python
+class JobParams(BaseModel):
+    model_id: str
+```
+
+- `TranscriptionParams(JobParams)` (model variant, beam size, `initial_prompt`, ...),
   `TranscriptSegment` (start/end ms, text), `TranscriptionResult` (segments, model_id,
   params, elapsed_s, device).
-- `DiarizationParams` (clustering settings), `DiarizationTurn` (start/end ms, speaker
-  label), `DiarizationResult` (turns, model_id, params, elapsed_s, device).
+- `DiarizationParams(JobParams)` (clustering settings), `DiarizationTurn` (start/end ms,
+  speaker label), `DiarizationResult` (turns, model_id, params, elapsed_s, device).
+
+`model_id` lives on `DiarizationParams` even though diarization currently has exactly
+one model (`ivrit-ai/pyannote-speaker-diarization-3.1`, pinned, `design.md` §3) — that's
+today's reality, not a constraint the schema should bake in. A future segmentation or
+clustering-model swap becomes a new `DiarizationParams.model_id` value, not a schema
+change to `lab_jobs` or to the generic model-id-extraction logic above.
 
 `initial_prompt` is included in `TranscriptionParams` from the start even though tuning
 it is deferred (`design.md` §9) — the model has to exist anyway, so there's no reason to
@@ -306,10 +339,37 @@ directly, so there's no separate "wire format" to define and keep in sync by han
 
 ### 4.3 Job execution: subprocess, tracked in Postgres
 
-Clicking "run" in the frontend calls the backend API, which does
-`subprocess.Popen(["uv", "run", "python", "-m", "data_pipelines.lab.run_job",
-str(job_id)])` after inserting the `lab_jobs` row (status `running`, `pid` from the
-`Popen` result — known immediately, no `queued` phase needed).
+Clicking "run" in the frontend calls the backend API, which inserts the `lab_jobs` row
+first (status `running`, `pid` left `null`) to get an `id`, then does
+`subprocess.Popen([sys.executable, "-m", "data_pipelines.lab.run_job",
+str(job_id)])` — `run_job.py` needs that `id` as its own argument, so the row has to
+exist before the subprocess can be started, which means the real OS pid can't be known
+at insert time. The handler writes `pid` back onto the row immediately after `Popen`
+returns, still within the same request, before responding to the frontend — so a caller
+of `GET /lessons/{id}/jobs` essentially never observes a `running` row with a null
+`pid`; §4.3's liveness check below treats one as dead if it ever does (crash between
+insert and the pid write-back), the same as a pid that's gone stale.
+
+**`sys.executable`, not `["uv", "run", "python", ...]`, confirmed during implementation.**
+The API process is itself already started via `uv run uvicorn ...`, so `sys.executable`
+already points at the right venv interpreter — no need to re-resolve the environment
+per job launch. This isn't just simpler: going through `uv run` actually breaks the
+liveness check below, because `uv run` forks a child python process rather than
+exec-replacing itself, so the pid `Popen` returns would be the `uv` wrapper's, not the
+worker's — `os.kill(pid, 0)` would then report the wrapper as alive/dead independently
+of whatever the actual worker process is doing. `sys.executable` makes the tracked pid
+the real worker, which is what the liveness check needs to mean anything.
+
+**The liveness check also has to reap, not just probe.** This API process is the direct
+parent of every job subprocess it launches, so a subprocess that has died is a *zombie*
+until something calls `wait()` on it — and `os.kill(pid, 0)` reports a zombie as
+"alive" the same as a running process, since it still holds a pid. The liveness check
+(`data_pipelines.lab.jobs.is_alive`) calls `os.waitpid(pid, os.WNOHANG)` first — which
+both reaps a finished child (so zombies don't accumulate for the server's lifetime) and
+is how a just-died child is actually detected — before falling back to the plain
+`os.kill(pid, 0)` existence check for pids that were never this process's child (e.g.
+stale ones from a previous server run). Confirmed against a real `kill -9` mid-run:
+without the `waitpid` reap, the killed job stayed reported as `running` indefinitely.
 
 This is what makes a page refresh safe, per `design.md` §8.1's underlying requirement:
 the frontend holds no run state of its own — the run panel's "is something already
@@ -328,10 +388,11 @@ launching a second subprocess.
    `ended_at`, then re-raises (so the subprocess still exits non-zero).
 
 A `running` row whose `pid` is no longer alive (`os.kill(pid, 0)` raising
-`ProcessLookupError`) means the subprocess died without updating its own status — a hard
-kill, not a caught exception (§4.5 covers which failures that includes). The frontend
-surfaces this as "process appears to have died" with a manual retry, rather than
-silently guessing at what happened.
+`ProcessLookupError`) — or whose `pid` is still `null` past the brief insert-then-Popen
+window above — means the subprocess died (or never started) without updating its own
+status — a hard kill, not a caught exception (§4.5 covers which failures that includes).
+The frontend surfaces this as "process appears to have died" with a manual retry, rather
+than silently guessing at what happened.
 
 ### 4.4 Results live in Postgres, not the filesystem
 
@@ -343,6 +404,11 @@ a row and a file to disagree (a job marked `done` with no matching file, or vice
 If a future need (e.g. querying inside results across many runs) calls for decomposing
 this into real columns or child tables, that's a migration on this one column, not a
 storage-layer rewrite — nothing else in the lab talks to the filesystem for results.
+
+Transcript search (§4.9) is deliberately *not* that need: it searches one lesson, whose
+result the browser has already fetched in full. The trigger for decomposing into rows
+remains a question about many lessons at once — and by `design.md` §8.5 that question
+belongs to production tables built by the real pipeline, not to `lab_jobs` leftovers.
 
 ### 4.5 Logging: `print()`, captured, written once at completion
 
@@ -381,19 +447,30 @@ frontend shows a loading state), rather than as a tracked subprocess: unlike a
 multi-minute model run, a single file download is short enough that blocking on it isn't
 worth the tracking machinery in §4.3.
 
-### 4.7 Host/not-host is a display-time heuristic, not a stored field
+### 4.7 Host/not-host is a merge-job output, cheap to redo — not a display-time guess
 
 `DiarizationTurn` (§4.2) stores exactly what `pyannote` returns — a raw speaker label
-per turn, nothing else. Which label (if any) is "the host" is computed in the frontend
-from that data (starting point: total speaking duration per label, matching
-`design.md` §3's observation that the host was the single dominant label on the test
-lesson) — not written back to `result_json`, and not a new column.
+per turn, nothing else. Which label is "the host" is decided by the merge job (§5.3)
+and stored in *its* result: `summarize_speakers()` in `lab/merge.py` takes the label with
+the most total speaking time (`design.md` §3's observation that the host was the single
+dominant label on the test lesson), and numbers the rest by first appearance, which is
+what the UI renders as `מנחה` / `שואל N`.
 
-This is deliberate, not a shortcut: the heuristic itself is unproven (§8), so the whole
-point of this view is to let it be checked against the raw labels, not trusted. Keeping
-it purely client-side means trying a different heuristic is an edit to display code, not
-a migration or a rerun of already-completed jobs — cheap exactly where cheapness matters
-while the rule is still being figured out.
+**This revises an earlier decision** to compute it in the frontend and never store it.
+The reasoning then was that the heuristic is unproven (§8), so changing it should cost an
+edit to display code rather than a migration or a rerun. The merge job satisfies that
+just as well: it runs no model and touches no audio, so re-running it after changing the
+rule takes about a second and one click — while keeping *one* implementation of the rule
+instead of one in Python and a second in TypeScript, free to drift apart.
+
+What that earlier decision was protecting is kept intact:
+
+- Nothing but the merge job's own `result_json` records it — no column on `lessons`, none
+  on `lab_jobs`; the row is disposable by construction (§4.4).
+- The raw label stays on screen next to the friendly one (§2), so the assignment can be
+  checked rather than trusted.
+- Speaker roles simply don't appear until a merge has run. A lesson with a diarization
+  and no merge shows raw labels — an honest description of what is known at that point.
 
 ### 4.8 Long-lesson navigation: virtual scroll plus time-jump
 
@@ -412,6 +489,83 @@ A two-hour Q&A show produces hundreds of segments and turns. Two decisions, not 
   virtualized lists move together, the same sync already used for click-to-seek (§2) —
   jumping is just a coarser way of moving the same shared position, not a separate
   mechanism.
+
+**The list follows the playhead only while audio is actually playing.** Following while
+paused fights the operator: the virtualizer re-attempts a pending "scroll to the active
+row" across measurement passes, so a standing instruction to follow pulls the view back
+from anywhere they scroll to — including search jumps (§4.9).
+
+### 4.9 Transcript search: in the browser, over normalized text
+
+Searching a lesson's transcript happens entirely client-side, in
+`frontend/src/lib/transcriptSearch.ts`. The whole transcript is already in the browser
+(§4.4 — one response, no pagination), and a long lesson is ~1500 segments, so an
+`indexOf` over an in-memory index answers every keystroke without a round trip. A
+backend endpoint would add latency to search data the client already holds; a Postgres
+`pg_trgm` index would earn nothing scanning one lesson's worth of rows (its moment comes
+with catalogue-wide search, which belongs to production tables — §4.4).
+
+**Matching is exact, over a normalized form of both text and query** — that normalization
+is the entire "fuzziness" budget, and it's symmetric, so it doesn't matter which side a
+difference is on:
+
+| Input | Rule | Why |
+| --- | --- | --- |
+| Niqqud, te'amim | removed | pasted text carries them, Whisper's output doesn't |
+| Bidi controls (`U+202B`, …) | removed | Whisper's Hebrew output is full of them, and they are invisible |
+| Geresh/gershayim, ASCII quotes | removed, no separator | `רמב״ם` = `רמב"ם` = `רמבם`; a space here would split the word |
+| Maqaf, other punctuation | → separator | `מרן, השולחן־ערוך` matches `מרן השולחן ערוך` |
+| Whitespace runs | collapsed | segment joins, spacing quirks |
+
+Segments are joined by a space in the index, so a phrase split across a segment boundary
+is still found and marked in both rows. Deliberately *not* normalized: final-form letters,
+and prefixes (`ו`/`ה`/`ב`/`ל`/`ש`) — plain substring matching already finds `שולחן ערוך`
+inside `בשולחן ערוך`, and folding prefixes would only add false positives. There is no
+stemming and nothing semantic: `שנה` does not find `שנים`, by design.
+
+### 4.10 Comparing runs: words, not segments; the timeline, not the diff
+
+Two transcription runs of one lesson chunk it differently — a different
+`initial_prompt` or beam size moves segment boundaries — so comparing segment to
+segment reports re-chunking as though it were a change. The comparison is therefore
+**word-level**, over the normalized form of §4.9 (so re-punctuation reads as identical),
+with the marks painted back onto the original text through the same offset mapping the
+search uses. `frontend/src/lib/transcriptDiff.ts` holds it; the diff itself is jsdiff's
+`diffArrays` over token arrays.
+
+**Alignment is the timeline, not the diff.** Each run is laid out by its own timestamps
+in its own column, and the columns are scroll-synced *on time*: whichever column the
+operator is scrolling publishes the moment at the top of its viewport, and the others
+scroll to whichever row holds that moment. Row-index sync would drift immediately —
+the columns have different row counts. Two mechanics make this work rather than
+oscillate:
+
+- **The publisher is identified.** A column ignores anchors it published itself, so two
+  synced columns don't chase each other.
+- **Programmatic scrolls are fenced off.** Any scroll this component performs (playback
+  following, a search jump, a difference jump, an anchor it is following) suppresses
+  anchor publishing briefly, so it is not mistaken for the operator scrolling.
+
+While audio is playing, playback drives every column and manual anchoring is off — the
+sync that matters is the one already in §4.8.
+
+**Navigation is by difference, not by scrolling.** Most of a transcript is identical
+between prompt variants, so the view counts the disagreements and steps between them
+(▲/▼), each step publishing that moment as the anchor so every column lands together.
+Each column's diff numbers its groups from zero, so they are renumbered globally — with
+three columns, "the current difference" has to mean one thing on screen.
+
+**One channel per meaning**, because a row can be playing, host-spoken, holding changed
+words, and holding the current change all at once: the row's inline-start edge is
+playback, the chip is the speaker, and word backgrounds are diffs (with search hits as
+an underline, so a word can be both). This replaced an earlier speaker accent bar that
+occupied the same pixels as the playing row's edge bar.
+
+**Nothing is written.** The diff is recomputed on every render from results already
+fetched, and speaker tagging for the columns comes from `POST /api/lab/merge-preview`,
+which runs `merge.py`'s own functions and returns without inserting a row — looking at a
+page should not leave `lab_jobs` rows behind. The merge *job* remains the way to produce
+a recorded artifact with params and a git SHA.
 
 ---
 
@@ -433,7 +587,7 @@ erDiagram
 | `job_description`     | text        | not null                           | frozen copy of `LabJob.description`                             |
 | `job_version_notes`   | text        | not null                           | frozen copy of `LabJob.version_notes`                            |
 | `status`              | text        | not null                           | `"running"` \| `"done"` \| `"failed"`                            |
-| `pid`                 | int         | not null                           | of the `run_job.py` subprocess                                  |
+| `pid`                 | int         | nullable                           | of the `run_job.py` subprocess — `null` only in the brief window between the row's insert and the `Popen` call returning (§4.3) |
 | `params`              | jsonb       | not null                           | the job's typed params (§4.2), serialised                       |
 | `model_id`            | text        | not null                           | duplicated out of `params` for queryability without JSON paths  |
 | `result_json`         | jsonb       | nullable                           | populated on success — see §4.4                                 |
@@ -459,15 +613,34 @@ lesson picker's "what's been run on this lesson" view doesn't need a `UNION` acr
 per-type tables, and adding the merge job type is a new `LabJob` subclass and a new
 registry entry — no migration.
 
-### 5.3 Extensibility for the merge job
+### 5.3 The merge job
 
-When transcript/diarization merging (`design.md` §3) is ready to build, it becomes
-`class MergeJob(LabJob[MergeParams, MergeResult])` with `key = "merge"`, registered
-alongside the other two. Its `run()` differs from the other two in what it actually
-needs — prior `TranscribeJob`/`DiarizeJob` results rather than raw audio — which is
-exactly what `JobContext` (§4.1) already accommodates: it's built by `run_job.py` per
-job type, not a fixed signature every type must conform to. No schema change on
-`lab_jobs`.
+Transcript/diarization merging (`design.md` §3) is `class MergeJob(LabJob[MergeParams,
+MergeResult])` in `lab/merge.py`, `key = "merge"`, registered alongside the other two. As
+this section anticipated, it needs prior `TranscribeJob`/`DiarizeJob` results rather than
+raw audio, and `JobContext` (§4.1) absorbed that — it's built by `run_job.py` per job
+type, not a fixed signature every type must conform to. Two generic additions made it fit
+with no branch on `job_type` anywhere:
+
+- **`JobParams.source_job_ids()`** — a job type names the completed rows it consumes
+  (`{"transcription": …, "diarization": …}` for the merge, empty for the other two).
+  `run_job.py` resolves them and files their `result_json` under those names in
+  `JobContext.source_results`; the launch endpoint validates the same declaration up
+  front, so a reference to a missing, still-running, or other-lesson job is a 422 rather
+  than a subprocess that dies a second later. `merge.py` itself never sees a `Session`.
+- **`LabJob.needs_audio`** — `False` here, so the audio cache checks are skipped and
+  `JobContext.audio_path` is `None`. Jobs that do need audio read it through
+  `require_audio()` rather than carrying the `Optional` into their own code.
+
+**One schema change, not none:** `lab_jobs.model_id` is now nullable, because a merge
+runs no model and a sentinel string would pollute the one column that exists to be
+queried without JSON paths (§5.1). Everything else is as predicted — the result is an
+ordinary `result_json` blob (§4.4), no new table.
+
+Its result carries the merged segments (text, times, assigned raw label), the speaker
+summary that §4.7 describes, and a frozen copy of the source job ids — enough for the UI
+to render the merged view without re-reading the source jobs, and enough to notice when a
+newer transcribe/diarize run has since superseded what the merge consumed.
 
 ### 5.4 The `lab` schema outlives this lab
 

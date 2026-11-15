@@ -16,11 +16,14 @@ import httpx
 from pydantic import BaseModel
 from rich.progress import Progress
 
-from data_pipelines.adapters.base import LessonCandidate
-from data_pipelines.adapters.http import DirectUrlAdapter
+from data_pipelines.adapters.base import KIND_WHOLE_FEED, LessonCandidate, WholeFeedConfig
+from data_pipelines.db.models import IngestRule, Series
+from data_pipelines.adapters.http import DirectUrlSourceAdapter
 from data_pipelines.progress import label
 
-EPISODES_URL = "https://api.spreaker.com/v2/shows/6821120/episodes"
+# The show id comes from the source row, not a constant: a second Spreaker show
+# would be another `sources` row, not another module.
+_EPISODES_URL = "https://api.spreaker.com/v2/shows/{show_id}/episodes"
 
 # Undocumented in Spreaker's API; every episode observed lands at the same time of
 # day (06:00:0x) regardless of the Israel/UTC DST offset at that date, consistent
@@ -43,19 +46,28 @@ class _SpreakerPage(BaseModel):
     next_url: str | None
 
 
-class ArielQAAdapter(DirectUrlAdapter):
+class ArielSourceAdapter(DirectUrlSourceAdapter):
+    RULE_CONFIGS = {KIND_WHOLE_FEED: WholeFeedConfig}
+
     def discover(
         self,
+        rule: IngestRule,
+        series: Series,
         *,
         known_external_ids: AbstractSet[str] = frozenset(),
         progress: Progress | None = None,
     ) -> Iterator[LessonCandidate]:
-        # Ignored like YouTubePlaylistAdapter's: each page is already one cheap API
-        # call listing many episodes, nothing per-item to skip by knowing ids early.
+        # Validated for its own sake: `whole_feed` carries no config, so the only thing
+        # this can catch is a rule that should never have been pointed here — and that
+        # would otherwise list the whole show under some other series' name.
+        self.rule_config(rule)
+        # The show *is* the series, so `series` shapes nothing. known_external_ids is
+        # ignored like YouTubeSourceAdapter's: each page is already one cheap API call
+        # listing many episodes, nothing per-item to skip by knowing ids early.
         del known_external_ids
         task = progress.add_task(label("Ariel Q&A"), total=None) if progress is not None else None
         try:
-            url: str | None = EPISODES_URL
+            url: str | None = _EPISODES_URL.format(show_id=self.source.external_id)
             while url is not None:
                 response = httpx.get(url, timeout=30)
                 response.raise_for_status()

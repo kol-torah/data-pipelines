@@ -1,29 +1,45 @@
-"""Maps series.adapter_key to its adapter class."""
+"""Maps a source's `platform` and `parser_key` to the adapter class that serves it.
 
-from data_pipelines.adapters.ariel import ArielQAAdapter
-from data_pipelines.adapters.base import SeriesAdapter
-from data_pipelines.adapters.butbul import (
-    ButbulDailyHalachaAdapter,
-    ButbulHalichotOlamAdapter,
-    ButbulSichatHulinAdapter,
-    ButbulWeeklyLessonAshkelonAdapter,
-)
-from data_pipelines.adapters.eliyahu import ElyahuQAAdapter
-from data_pipelines.db import Series
+Keyed on the *source*, not the series: one adapter now serves every series a source
+feeds, because which videos a series gets is an `IngestRule` rather than a class
+constant (documents/plans/implemented/catalogue-redesign-plan.md §3.5). Two sources sharing a
+`parser_key` — Butbul's two channels — share one class and differ only by their row.
+"""
 
-ADAPTERS: dict[str, type[SeriesAdapter]] = {
-    "ButbulHalichotOlam": ButbulHalichotOlamAdapter,
-    "ButbulSichatHulin": ButbulSichatHulinAdapter,
-    "ButbulWeeklyLessonAshkelon": ButbulWeeklyLessonAshkelonAdapter,
-    "ButbulDailyHalacha": ButbulDailyHalachaAdapter,
-    "ElyahuQA": ElyahuQAAdapter,
-    "ArielQA": ArielQAAdapter,
+from data_pipelines.adapters.ariel import ArielSourceAdapter
+from data_pipelines.adapters.base import SourceAdapter
+from data_pipelines.adapters.butbul import ButbulSourceAdapter
+from data_pipelines.adapters.eliyahu import ElyahuSourceAdapter
+from data_pipelines.adapters.generic_youtube import GenericYouTubeSourceAdapter
+from data_pipelines.adapters.hazon_ovadia import HazonOvadiaSourceAdapter
+from data_pipelines.adapters.or_hachaim import OrHaChaimSourceAdapter
+from data_pipelines.db import Source
+
+SOURCE_ADAPTERS: dict[str, type[SourceAdapter]] = {
+    "butbul": ButbulSourceAdapter,
+    "eliyahu": ElyahuSourceAdapter,
+    "ariel": ArielSourceAdapter,
+    "hazon_ovadia": HazonOvadiaSourceAdapter,
+    "or_hachaim": OrHaChaimSourceAdapter,
+    # Not bespoke, and the only entry here that is meant to be shared: a channel whose
+    # rules already know the speaker needs no parser of its own, so pointing it here is
+    # what makes its series pure catalogue rows (generic_youtube.py).
+    #
+    # Registered under both spellings deliberately. It is the only key a curator types
+    # from memory rather than copies from an existing row, and it is also the only
+    # multi-word one — so it is the only one where a slip between `-` and `_` is
+    # plausible. Since an unknown `parser_key` skips the whole source with nothing but a
+    # console line (get_source_adapter), that slip would look like a channel that had
+    # stopped uploading.
+    "generic-youtube": GenericYouTubeSourceAdapter,
+    "generic_youtube": GenericYouTubeSourceAdapter,
 }
 
 
-def get_adapter(series: Series) -> SeriesAdapter | None:
-    """None if series.adapter_key isn't registered — e.g. a series seeded from the
-    catalogue whose adapter hasn't been built yet. Callers should skip the series,
-    not crash."""
-    adapter_cls = ADAPTERS.get(series.adapter_key)
-    return adapter_cls(series) if adapter_cls is not None else None
+def get_source_adapter(source: Source) -> SourceAdapter | None:
+    """None if `source.parser_key` isn't registered — e.g. a source seeded from the
+    catalogue whose parser hasn't been built yet. Callers should skip it and say so,
+    not crash: a half-built catalogue is the normal state while channels are being
+    onboarded."""
+    adapter_cls = SOURCE_ADAPTERS.get(source.parser_key)
+    return adapter_cls(source) if adapter_cls is not None else None

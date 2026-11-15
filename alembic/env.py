@@ -8,6 +8,11 @@ from alembic import context
 from data_pipelines.config import get_settings
 from data_pipelines.db.base import Base
 
+# `data_pipelines.db` (imported above via db.base) already registers public-schema
+# models on Base.metadata as a side effect of its __init__.py; lab isn't imported by
+# anything else on this path, so it's imported explicitly here for the same reason.
+from data_pipelines.lab import models as _lab_models  # noqa: F401
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
@@ -20,16 +25,19 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
-def get_url() -> str:
-    """kol_torah by default; pass -x db=lab to target kol_torah_lab instead.
+def include_object(object, name, type_, reflected, compare_to) -> bool:
+    """Keep views out of autogenerate.
 
-    Both databases share this one migration chain (design.md 7.1: identical layout,
-    distinguished only by connection string), so this is the only place the two
-    diverge.
-    """
-    x_args = context.get_x_argument(as_dictionary=True)
-    lab = x_args.get("db") == "lab"
-    return get_settings().database_url(lab=lab)
+    A view mapped onto Base (db.models.SeriesSpeaker) looks exactly like a table to
+    autogenerate, which would then propose creating it — and, on the next run, dropping
+    the real one. Views are created by the migration that introduces them and marked
+    `info={"is_view": True}` on the model."""
+    del name, reflected, compare_to
+    return not (type_ == "table" and object.info.get("is_view"))
+
+
+def get_url() -> str:
+    return get_settings().database_url()
 
 
 def run_migrations_offline() -> None:
@@ -49,6 +57,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -66,7 +75,9 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            include_object=include_object,
         )
 
         with context.begin_transaction():

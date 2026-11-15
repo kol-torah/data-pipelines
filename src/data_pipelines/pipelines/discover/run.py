@@ -12,11 +12,12 @@ import argparse
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from data_pipelines.adapters.registry import get_adapter
+from data_pipelines.adapters.yt_dlp_cli import warn_if_outdated
 from data_pipelines.config import get_settings
 from data_pipelines.pipelines.discover.s01_discover import discover_all
 from data_pipelines.pipelines.discover.s02_download import (
     DownloadJob,
+    adapter_for,
     lessons_needing_download,
     recover_from_bucket,
     run_downloads,
@@ -26,6 +27,11 @@ from data_pipelines.pipelines.discover.series import series_to_run
 
 
 def run(series_slug: str | None = None) -> None:
+    # Up front, before any stage: an outdated yt-dlp surfaces much later as every
+    # YouTube download failing with HTTP 403, which reads like a problem with the
+    # videos rather than with the tool. Advisory only — never fails the run.
+    warn_if_outdated()
+
     cache_root = get_settings().local_cache_dir
     engine = create_engine(get_settings().database_url())
     with Session(engine, expire_on_commit=False) as session:
@@ -37,12 +43,11 @@ def run(series_slug: str | None = None) -> None:
         print("=== stage 2: download ===")
         jobs: list[DownloadJob] = []
         for series in series_list:
-            adapter = get_adapter(series)
-            if adapter is None:
-                print(f"{series.slug}: no adapter for {series.adapter_key!r}, skipping")
-                continue
             pending = recover_from_bucket(session, series, lessons_needing_download(session, series))
-            jobs.extend(DownloadJob(adapter, series, lesson) for lesson in pending)
+            for lesson in pending:
+                adapter = adapter_for(lesson)
+                if adapter is not None:
+                    jobs.append(DownloadJob(adapter, series, lesson))
         run_downloads(engine, jobs, cache_root)
 
         print("=== stage 3: store ===")

@@ -2,14 +2,22 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Streamlit: Admin app",
+            "name": "Frontend: Debug in Chrome",
+            "type": "chrome",
+            "request": "launch",
+            "url": "http://localhost:5173",
+            "webRoot": "${workspaceFolder}/frontend",
+            "preLaunchTask": "Frontend: Vite dev server"
+        },
+        {
+            "name": "Python: Admin/lab API",
             "type": "debugpy",
             "request": "launch",
-            "module": "streamlit",
+            "module": "uvicorn",
             "args": [
-                "run",
-                "${workspaceFolder}/src/data_pipelines/admin_app.py",
-                "--server.headless=true"
+                "data_pipelines.admin_lab_api.main:app",
+                "--port",
+                "8000"
             ],
             "cwd": "${workspaceFolder}",
             "justMyCode": true

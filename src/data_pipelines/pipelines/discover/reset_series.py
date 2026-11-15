@@ -18,7 +18,14 @@ from sqlalchemy import create_engine, delete, select
 from sqlalchemy.orm import Session
 
 from data_pipelines.config import get_settings
-from data_pipelines.db import AudioFile, Lesson, LessonDownload, LessonDuplicate, Series
+from data_pipelines.db import (
+    AudioFile,
+    Lesson,
+    LessonDownload,
+    LessonDuplicate,
+    LessonSpeaker,
+    Series,
+)
 from data_pipelines.pipelines.discover.text import pluralize
 
 
@@ -32,6 +39,7 @@ def delete_series_lessons(session: Session, series: Series) -> int:
             LessonDuplicate.lesson_id.in_(lesson_ids) | LessonDuplicate.duplicate_of_id.in_(lesson_ids)
         )
     )
+    session.execute(delete(LessonSpeaker).where(LessonSpeaker.lesson_id.in_(lesson_ids)))
     session.execute(delete(AudioFile).where(AudioFile.lesson_id.in_(lesson_ids)))
     session.execute(delete(LessonDownload).where(LessonDownload.lesson_id.in_(lesson_ids)))
     session.execute(delete(Lesson).where(Lesson.id.in_(lesson_ids)))

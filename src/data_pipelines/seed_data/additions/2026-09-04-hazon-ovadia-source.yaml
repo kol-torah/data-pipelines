@@ -1,0 +1,31 @@
+# כולל חזון עובדיה as a `sources` row, and nothing else.
+# documents/pipelines/kolel-channels.md §3; adding-series-plan.md §5.1.
+#
+# Separate from the series/rule delta on purpose. A source row is what `prediscover`
+# needs to survey a channel, and surveying is what tells you what the series and the
+# speakers should be called — so committing to those names in the same file you need in
+# order to *find them out* has the dependency backwards.
+#
+# **A source row ingests nothing.** Discovery is driven by `ingest_rules`, and there are
+# none here, so seeding this is safe and reversible in the only sense that matters:
+# nothing runs, nothing downloads, no lesson row is created.
+#
+# **One channel per file, deliberately.** The other three surveyed channels (אור החיים,
+# מכון מאיר, ישיבת הר עציון) have their ids recorded in kolel-channels.md and get their
+# own delta when they are actually onboarded. Seeding a source before anything ingests
+# from it leaves a row in the catalogue that no rule explains — which reads, months
+# later, like a channel that silently stopped uploading rather than one that was never
+# started.
+#
+#   uv run python -m data_pipelines.catalogue.seed_catalogue \
+#       --input src/data_pipelines/seed_data/additions/2026-09-04-hazon-ovadia-source.yaml --delta
+
+sources:
+# Title-routed (kolel-channels.md §3): 4,650 videos, 3 playlists covering ~3%. The
+# survey that matters for this channel is the speaker census read off video titles, not
+# the playlist list — there is nothing in the playlists to accept.
+- slug: hazon-ovadia
+  name: כולל חזון עובדיה
+  platform: youtube
+  external_id: UCn2y_95ph3aCIQ87Fp7Z_0w
+  parser_key: hazon_ovadia

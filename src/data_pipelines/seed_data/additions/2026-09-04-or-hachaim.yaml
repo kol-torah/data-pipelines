@@ -1,0 +1,79 @@
+# אור החיים — four title-routed series, one rabbi.
+# documents/plans/adding-series-plan.md §5.2; counts from kolel-channels.md §4.
+#
+# The channel is Rabbi Reuven Elbaz's yeshiva, so the speaker filter alone would put all
+# 1,374 videos in one series. What separates them is the second title segment, which is
+# why each rule carries a `topic` as well.
+#
+# BEFORE SEEDING: check `name_en` and every `lesson_type`, then:
+#   uv run python -m data_pipelines.catalogue.seed_catalogue \
+#       --input src/data_pipelines/seed_data/additions/2026-09-04-or-hachaim.yaml --delta
+#   uv run python -m data_pipelines.catalogue.export_catalogue
+
+# The `sources` row is not seeded yet — אור החיים gets its own source delta, alongside
+# this file, when it is actually onboarded (see 2026-09-04-hazon-ovadia-source.yaml for
+# the shape). Seed that first, survey the
+# channel, and only then seed this. Defined once, there, so the two files cannot drift.
+
+speakers:
+- slug: r-elbaz
+  name_he: הרב ראובן אלבז
+  name_en: Rabbi Reuven Elbaz    # CHECK
+
+# The channel writes him both ways — 826 titles as `הרב אלבז`, 10 as `הרב ראובן אלבז`.
+# Two rows, one man; the parser never normalizes a name, that is what this table is for.
+speaker_aliases:
+- name_he: אלבז
+  speaker: r-elbaz
+- name_he: ראובן אלבז
+  speaker: r-elbaz
+
+series:
+- slug: r-elbaz-musar-weekly
+  name_he: שיעור המוסר השבועי
+  name_en: Weekly Musar Lesson              # CHECK
+  lesson_type: musar
+- slug: r-elbaz-selichot
+  name_he: סליחות
+  name_en: Selichot                         # CHECK
+  lesson_type: moed                         # CHECK
+- slug: r-elbaz-tikun
+  name_he: מעמד התיקון לביטול הגזירה הנוראה
+  name_en: Tikun Assembly                   # CHECK
+  lesson_type: moed                         # CHECK
+- slug: r-elbaz-biurim-parasha
+  name_he: ביאורים על פרשת השבוע
+  name_en: Explanations on the Weekly Parasha   # CHECK
+  lesson_type: parasha
+
+# Priorities are explicit and disjoint so that a title matching two topics is claimed by
+# the same rule every run, not by whichever the database returned first.
+ingest_rules:
+# 48 videos
+- source: or-hachaim
+  series: r-elbaz-tikun
+  kind: title_match
+  config: {speakers: [r-elbaz], topic: מעמד התיקון}
+  priority: 10
+# 187 videos
+- source: or-hachaim
+  series: r-elbaz-selichot
+  kind: title_match
+  config: {speakers: [r-elbaz], topic: סליחות}
+  priority: 20
+# 130 videos. The only rule here with no speaker filter: this series' titles name nobody
+# — `ביאורים על פרשת השבוע` is the whole first segment — and every description reads
+# `מאת מרן ראש הישיבה הגאון הרב ראובן אלבז`. Until §2.4 reads descriptions, the
+# attribution has to come from the rule, which is exactly what default_speaker is for.
+- source: or-hachaim
+  series: r-elbaz-biurim-parasha
+  kind: title_match
+  config: {topic: ביאורים על פרשת השבוע}
+  default_speaker: r-elbaz
+  priority: 30
+# 282 videos
+- source: or-hachaim
+  series: r-elbaz-musar-weekly
+  kind: title_match
+  config: {speakers: [r-elbaz], topic: שיעור המוסר השבועי}
+  priority: 40

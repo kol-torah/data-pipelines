@@ -17,7 +17,7 @@ stage.
 
 Downloads run concurrently (one asyncio task per lesson); each adapter is responsible
 for throttling itself against its own source's rate limits (see
-YouTubePlaylistAdapter's semaphore) — this stage doesn't know or care what those are.
+YouTubeSourceAdapter's semaphore) — this stage doesn't know or care what those are.
 Each lesson_downloads row is written as soon as that lesson's download finishes, in
 completion order, not batched until the whole job list is done: a run interrupted
 partway through (e.g. Ctrl+C) must not lose the record of lessons already downloaded,
@@ -41,8 +41,9 @@ from rich.progress import Progress
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from data_pipelines.adapters.base import SeriesAdapter
-from data_pipelines.adapters.registry import get_adapter
+from data_pipelines.adapters.base import SourceAdapter
+from data_pipelines.adapters.registry import get_source_adapter
+from data_pipelines.adapters.yt_dlp_cli import warn_if_outdated
 from data_pipelines.config import get_settings
 from data_pipelines.db import AudioFile, Lesson, LessonDownload, Series
 from data_pipelines.pipelines.discover.series import series_to_run
@@ -55,17 +56,30 @@ STAGING_SUBDIR = "staging"
 
 @dataclass
 class DownloadJob:
-    adapter: SeriesAdapter
+    adapter: SourceAdapter
     series: Series
     lesson: Lesson
 
 # Downloads happen strictly one at a time, deliberately — not just inside a given
-# adapter (e.g. YouTubePlaylistAdapter's own semaphore), but across this whole
+# adapter (e.g. YouTubeSourceAdapter's own semaphore), but across this whole
 # pipeline stage. asyncio.gather still schedules every job up front, so without this
 # cap all of them would sit "in flight" simultaneously (and show a live progress row
 # each) even while blocked on an adapter's own throttling underneath — which both
 # looks like, and is, more than one download running at once.
 MAX_CONCURRENT = 1
+
+
+def adapter_for(lesson: Lesson) -> SourceAdapter | None:
+    """How a lesson is fetched is a property of where it came from, not of the series it
+    was filed under — two series on one channel download identically, and one series
+    could in principle draw on two sources."""
+    adapter = get_source_adapter(lesson.source)
+    if adapter is None:
+        print(
+            f"{lesson.source.slug}: no adapter for parser_key "
+            f"{lesson.source.parser_key!r}, skipping {lesson.external_id}"
+        )
+    return adapter
 
 
 def staging_dir(cache_root: Path, series: Series) -> Path:
@@ -130,7 +144,7 @@ def recover_from_bucket(session: Session, series: Series, lessons: list[Lesson])
 
 
 async def download_lesson(
-    adapter: SeriesAdapter, series: Series, lesson: Lesson, cache_root: Path
+    adapter: SourceAdapter, series: Series, lesson: Lesson, cache_root: Path
 ) -> Path:
     tmp_path = await adapter.download(lesson)
     dest_dir = staging_dir(cache_root, series)
@@ -221,6 +235,7 @@ def main() -> None:
     group.add_argument("--lesson-id", type=int, default=None)
     args = parser.parse_args()
 
+    warn_if_outdated()
     cache_root = get_settings().local_cache_dir
     engine = create_engine(get_settings().database_url())
     jobs: list[DownloadJob] = []
@@ -233,21 +248,18 @@ def main() -> None:
                 series = lesson.series
                 pending = recover_from_bucket(session, series, [lesson])
                 if pending:
-                    adapter = get_adapter(series)
-                    if adapter is None:
-                        print(f"{series.slug}: no adapter for {series.adapter_key!r}, skipping")
-                    else:
+                    adapter = adapter_for(lesson)
+                    if adapter is not None:
                         jobs.append(DownloadJob(adapter, series, pending[0]))
         else:
             for series in series_to_run(session, args.series_slug):
-                adapter = get_adapter(series)
-                if adapter is None:
-                    print(f"{series.slug}: no adapter for {series.adapter_key!r}, skipping")
-                    continue
                 pending = recover_from_bucket(
                     session, series, lessons_needing_download(session, series)
                 )
-                jobs.extend(DownloadJob(adapter, series, lesson) for lesson in pending)
+                for lesson in pending:
+                    adapter = adapter_for(lesson)
+                    if adapter is not None:
+                        jobs.append(DownloadJob(adapter, series, lesson))
 
     run_downloads(engine, jobs, cache_root)
 
