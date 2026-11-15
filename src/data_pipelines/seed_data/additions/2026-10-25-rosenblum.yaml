@@ -1,0 +1,49 @@
+# הרב ברוך רוזנבלום — one playlist-routed series, no new code (adding-series-plan.md §1).
+#
+# The channel has other playlists; only the weekly-parasha "podcast" playlist is wanted.
+# It is titled `פרשת השבוע המרכזי תשפ״ו` but has carried on into תשפ״ז, so it is the
+# running series, not a one-year archive. Besides the parasha it holds the holiday
+# sermons (ר"ה, יוה"כ, סוכות, פורים, שבת הגדול, שבועות) — they stay in this series,
+# typed as parasha, rather than being split out.
+#
+# Surveyed 2026-10-25: 66 videos, two venues (מבקשי ה׳ אלעד, and the Bnei Brak
+# שיעור מרכזי). Known non-lesson: `ליל הושענא רבא שידור חי` (YN6A64mkH6o), a live-stream.
+# `youtube_playlist` has no `exclude`, so it will be ingested; drop it by hand if unwanted.
+#
+#   uv run python -m data_pipelines.catalogue.seed_catalogue \
+#       --input src/data_pipelines/seed_data/additions/2026-10-25-rosenblum.yaml --delta
+#   uv run python -m data_pipelines.catalogue.export_catalogue
+#   uv run python -m data_pipelines.pipelines.discover.s01_discover r-rosenblum-parasha
+
+speakers:
+- slug: r-rosenblum
+  name_he: הרב ברוך רוזנבלום
+  name_en: Rabbi Baruch Rosenblum
+
+# Unused by this rule (default_speaker attributes every lesson), but it is how every
+# title on the channel names him, so a later title-routed rule resolves without a new row.
+speaker_aliases:
+- name_he: ברוך רוזנבלום
+  speaker: r-rosenblum
+
+sources:
+- slug: rosenblum
+  name: הרב ברוך רוזנבלום — ברוך שאמר
+  platform: youtube
+  external_id: UCJ3fCI2FnNMEeU2y-TcdU4Q    # @RabbiRosenblum
+  parser_key: generic-youtube
+
+series:
+- slug: r-rosenblum-parasha
+  name_he: פרשת השבוע והמועדים
+  name_en: Weekly Parasha and Holidays
+  lesson_type: parasha
+  description_he: שיעורי פרשת השבוע ודרשות החגים של הרב ברוך רוזנבלום, באלעד ובבני ברק
+
+ingest_rules:
+- source: rosenblum
+  series: r-rosenblum-parasha
+  kind: youtube_playlist
+  config: {playlist_id: PLY778oWR4b_XhQDhL-MUP3dGuS88FEy5K}
+  default_speaker: r-rosenblum
+  priority: 100
