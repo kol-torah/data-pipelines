@@ -1,7 +1,9 @@
 """Discover pipeline, stage 2: download audio for lessons that don't have it yet.
 
 A lesson "needs download" if it has no audio_files row (fully stored, database-schema.md
-§3.4) and no lesson_downloads row (already downloaded, awaiting store — §3.4a). That row
+§3.4), no lesson_downloads row (already downloaded, awaiting store — §3.4a), and no
+lesson_unavailability row (§3.7): a lesson whose source replaced its file would
+otherwise download the replacement under its own name. That row
 only exists in the database, deliberately not inferred from the filesystem: a download
 that dies partway through can leave a real, non-empty file at the staging path, and only
 a database row — written after the file is fully in place — can tell "downloaded" apart
@@ -45,7 +47,7 @@ from data_pipelines.adapters.base import SourceAdapter
 from data_pipelines.adapters.registry import get_source_adapter
 from data_pipelines.adapters.yt_dlp_cli import warn_if_outdated
 from data_pipelines.config import get_settings
-from data_pipelines.db import AudioFile, Lesson, LessonDownload, Series
+from data_pipelines.db import AudioFile, Lesson, LessonDownload, LessonUnavailability, Series
 from data_pipelines.pipelines.discover.series import series_to_run
 from data_pipelines.pipelines.discover.storage import list_existing_audio
 from data_pipelines.pipelines.discover.text import pluralize
@@ -95,7 +97,13 @@ def lessons_needing_download(session: Session, series: Series) -> list[Lesson]:
             select(Lesson.id).join(LessonDownload).where(Lesson.series_id == series.id)
         )
     )
-    excluded = stored_ids | downloaded_ids
+    unavailable_ids = set(
+        session.scalars(
+            select(Lesson.id).join(LessonUnavailability, LessonUnavailability.lesson_id == Lesson.id)
+            .where(Lesson.series_id == series.id)
+        )
+    )
+    excluded = stored_ids | downloaded_ids | unavailable_ids
     return [
         lesson
         for lesson in session.scalars(select(Lesson).where(Lesson.series_id == series.id))
@@ -244,6 +252,10 @@ def main() -> None:
             lesson = session.get(Lesson, args.lesson_id)
             if lesson is None:
                 raise SystemExit(f"no lesson with id {args.lesson_id}")
+            if session.get(LessonUnavailability, lesson.id) is not None:
+                raise SystemExit(
+                    f"lesson {lesson.id} is marked unavailable at its source; not downloading"
+                )
             if lesson.audio_file is None and lesson.download is None:
                 series = lesson.series
                 pending = recover_from_bucket(session, series, [lesson])

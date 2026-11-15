@@ -1,5 +1,5 @@
 """Testing utility: delete every lesson for one series — and its dependent
-audio_files / lesson_downloads / lesson_duplicates rows — so s01_discover +
+audio_files / lesson_downloads / lesson_duplicates / lesson_unavailability rows — so s01_discover +
 s02_download can be re-run against it from scratch.
 
 Deliberately does NOT touch the S3 bucket. That's the point: after this runs,
@@ -24,6 +24,7 @@ from data_pipelines.db import (
     LessonDownload,
     LessonDuplicate,
     LessonSpeaker,
+    LessonUnavailability,
     Series,
 )
 from data_pipelines.pipelines.discover.text import pluralize
@@ -37,6 +38,12 @@ def delete_series_lessons(session: Session, series: Series) -> int:
     session.execute(
         delete(LessonDuplicate).where(
             LessonDuplicate.lesson_id.in_(lesson_ids) | LessonDuplicate.duplicate_of_id.in_(lesson_ids)
+        )
+    )
+    session.execute(
+        delete(LessonUnavailability).where(
+            LessonUnavailability.lesson_id.in_(lesson_ids)
+            | LessonUnavailability.superseded_by_id.in_(lesson_ids)
         )
     )
     session.execute(delete(LessonSpeaker).where(LessonSpeaker.lesson_id.in_(lesson_ids)))
@@ -70,7 +77,7 @@ def main() -> None:
         if not args.yes:
             answer = input(
                 f"Delete {pluralize(lesson_count, 'lesson')} for {series.slug!r} "
-                f"(and their audio_files/lesson_downloads/lesson_duplicates rows)? "
+                f"(and their audio_files/lesson_downloads/lesson_duplicates/lesson_unavailability rows)? "
                 f"The S3 bucket is not touched. [y/N] "
             )
             if answer.strip().lower() != "y":

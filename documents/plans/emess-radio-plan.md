@@ -1,6 +1,17 @@
 # Plan: two Q&A radio programs from קול חי (emess.co.il)
 
-**Status:** not started.
+**Status:** steps 1–5 of §5 implemented (2026-11-15); step 6, the full backfill, is
+outstanding. Of step 7's sibling-repo edits, `web-architecture.md` is done (G10); the
+sources xlsx was left as is.
+**Built:** `lesson_unavailability` (migration `e67f66e8cfe4`) and its stage 1 and 2
+wiring, `adapters/emess.py`, `adapters/gregorian_date.py` (Butbul now uses it), the
+content-type check in `adapters/http.py`, and `seed_data/additions/2026-11-15-emess.yaml`.
+The trial matched §5 step 5 exactly: 615 and 575 lessons, all attributed, and a rerun
+inserts nothing. Four lessons are stored (the oldest and newest of each program). The
+reused-URL path was exercised against the database in a rolled-back transaction.
+**Deviation:** no `(source_id, url)` index. Stage 1 already loads each source's lessons
+to build its known-id set, so URL owners come from that same query (`UrlOwners`) rather
+than a lookup per new lesson.
 **Source material:** `documents/chatgpt/emess-radio-archives-handoff.md` (ChatGPT research,
 2026-11-15). That document's API description and inventory were re-checked against the
 live site on the same day (§2). Most of it held, but four findings change the design:
@@ -263,8 +274,8 @@ station has overwritten that lesson's file. Stage 1 then does three things:
 The rule is generic, not Emess-only, but it can't fire for the other sources. YouTube
 lessons' URLs are derived from the video id, so the same URL means the same
 `external_id`. Ariel and Eliyahu have one URL per episode. That makes it safe to put in
-stage 1 rather than behind an adapter flag. The cost is one indexed lookup on
-`(source_id, url)` per *new* lesson only, so a weekly run costs nothing.
+stage 1 rather than behind an adapter flag. It costs nothing extra: the URLs come from
+the same per-source query that already builds the known-id set.
 
 Ingestion is immediate, with no waiting period, because the station stopped reusing
 names in June 2026 (§2.2). Rule 2 is the safety net if it starts again.
@@ -327,7 +338,7 @@ next run. No special handling.
 ## 5. Implementation steps
 
 1. **`lesson_unavailability`** (§4.4), done first because the rest depends on it:
-   - the Alembic migration, adding the table and an index on `lessons (source_id, url)`;
+   - the Alembic migration, adding the table;
    - the model and the reason `StrEnum`;
    - a new `database-schema.md` §3.7, plus a line in §4.5 saying that "unavailable" is a
      row-presence state like the others;

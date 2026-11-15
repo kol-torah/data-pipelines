@@ -341,7 +341,8 @@ def preview_reset_series(series_id: int, db: DbSession) -> ResetPreview:
     )
     warning = (
         f"Delete {pluralize(lesson_count, 'lesson')} for {series.slug!r} "
-        f"(and their audio_files/lesson_downloads/lesson_speakers/lesson_duplicates rows)? "
+        f"(and their audio_files/lesson_downloads/lesson_speakers/lesson_duplicates/"
+        f"lesson_unavailability rows)? "
         f"The S3 bucket is not touched."
     )
     return ResetPreview(lesson_count=lesson_count, warning=warning)

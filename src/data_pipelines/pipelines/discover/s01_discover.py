@@ -8,6 +8,10 @@ attached to the series whose rule claimed it. Idempotent — the
 the source is a no-op, and it also means one video is one lesson however many rules
 match it.
 
+A new lesson whose URL is already some other lesson's, from the same source, means the
+source replaced that lesson's file in place: the earlier lesson is marked unavailable
+(`lesson_unavailability`, emess-radio-plan.md §4.3 rule 2).
+
 Run with: uv run python -m data_pipelines.pipelines.discover.s01_discover [series-slug]
 (omit series-slug to run every series)
 """
@@ -34,9 +38,11 @@ from data_pipelines.db import (
     Lesson,
     LessonSpeaker,
     LessonType,
+    LessonUnavailability,
     Series,
     Speaker,
     SpeakerAlias,
+    UnavailabilityReason,
 )
 from data_pipelines.pipelines.discover.series import series_to_run
 from data_pipelines.pipelines.discover.text import pluralize
@@ -128,6 +134,25 @@ def wanted_speaker_ids(session: Session, config: RuleConfig) -> set[int]:
     return set(found.values())
 
 
+class UrlOwners:
+    """Which lesson each of one source's URLs currently belongs to.
+
+    Per source, like the known-external-id set, and for the same reason: two rules on
+    one source must see each other's claims within a run. A URL that several lessons
+    share (one already marked unavailable) belongs to the newest, which is the order the
+    caller loads them in."""
+
+    def __init__(self, owners: dict[str, int] | None = None) -> None:
+        self._owners: dict[str, int] = dict(owners or {})
+
+    def claim(self, url: str, lesson_id: int) -> int | None:
+        """Make `lesson_id` the URL's owner, returning the lesson it took the URL from,
+        if any. Claiming a URL one already owns is not a takeover."""
+        previous = self._owners.get(url)
+        self._owners[url] = lesson_id
+        return previous if previous != lesson_id else None
+
+
 @dataclass
 class RuleOutcome:
     """What one rule did this run. `unrouted` is only ever non-zero for `title_match`,
@@ -138,6 +163,7 @@ class RuleOutcome:
     new: int = 0
     already_known: int = 0
     unrouted: int = 0
+    marked_unavailable: int = 0
 
 
 def discover_for_rule(
@@ -145,6 +171,7 @@ def discover_for_rule(
     rule: IngestRule,
     adapter: SourceAdapter,
     known_external_ids: set[str],
+    url_owners: UrlOwners,
     lesson_type_ids: dict[str, int],
     config: RuleConfig,
     wanted: set[int],
@@ -194,7 +221,33 @@ def discover_for_rule(
                 LessonSpeaker(lesson_id=lesson.id, speaker_id=speaker_id, position=position)
             )
         outcome.new += 1
+        previous_id = url_owners.claim(lesson.url, lesson.id)
+        if previous_id is not None and mark_superseded(session, previous_id, lesson):
+            outcome.marked_unavailable += 1
+            message = (
+                f"{series.slug}: lesson {previous_id}'s URL is now claimed by "
+                f"{lesson.external_id} — marked unavailable"
+            )
+            if progress is not None:
+                progress.console.print(message)
+            else:
+                print(message)
     return outcome
+
+
+def mark_superseded(session: Session, lesson_id: int, superseded_by: Lesson) -> bool:
+    """Record that the source replaced this lesson's file. False if it was already
+    marked — the first reason found stands."""
+    if session.get(LessonUnavailability, lesson_id) is not None:
+        return False
+    session.add(
+        LessonUnavailability(
+            lesson_id=lesson_id,
+            reason=UnavailabilityReason.SOURCE_URL_REUSED,
+            superseded_by_id=superseded_by.id,
+        )
+    )
+    return True
 
 
 def discover_all(session: Session, series_list: list[Series]) -> None:
@@ -225,11 +278,14 @@ def discover_all(session: Session, series_list: list[Series]) -> None:
             # One video is one lesson per source, so the "already known" set is
             # per-source and shared across that source's rules — which is also what
             # makes rule priority decide a contested video within a single run.
-            known = set(
-                session.scalars(
-                    select(Lesson.external_id).where(Lesson.source_id == source.id)
-                )
-            )
+            known_rows = session.execute(
+                select(Lesson.id, Lesson.external_id, Lesson.url)
+                .where(Lesson.source_id == source.id)
+                .order_by(Lesson.id)
+            ).all()
+            known = {row.external_id for row in known_rows}
+            # Ascending id, so a URL several lessons share maps to the newest of them.
+            url_owners = UrlOwners({row.url: row.id for row in known_rows})
             for rule in source_rules:
                 progress.update(task, description=f"Discovering [bold]{rule.series.slug}[/]")
                 try:
@@ -248,6 +304,7 @@ def discover_all(session: Session, series_list: list[Series]) -> None:
                     rule,
                     adapter,
                     known,
+                    url_owners,
                     lesson_type_ids,
                     config,
                     wanted,
@@ -257,9 +314,14 @@ def discover_all(session: Session, series_list: list[Series]) -> None:
                 unrouted = (
                     f", {outcome.unrouted} not this rule's speakers" if outcome.unrouted else ""
                 )
+                unavailable = (
+                    f", {outcome.marked_unavailable} marked unavailable"
+                    if outcome.marked_unavailable
+                    else ""
+                )
                 progress.console.print(
                     f"{rule.series.slug}: {outcome.already_known} already known"
-                    f"{unrouted}, {pluralize(outcome.new, 'new lesson')}"
+                    f"{unrouted}, {pluralize(outcome.new, 'new lesson')}{unavailable}"
                 )
                 progress.advance(task)
 

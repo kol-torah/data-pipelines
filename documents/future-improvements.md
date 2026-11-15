@@ -17,3 +17,15 @@ a parking lot, added to as things come up during other work.
   like disabling the browser spellchecker on the same field (done — `spellCheck={false}`,
   since `model_id`/`beam_size`/`initial_prompt` aren't English prose and the squiggly
   underlines were pure noise).
+
+## Discover
+
+- **A periodic availability pass over every source** (`documents/plans/emess-radio-plan.md`
+  §6.1). `lesson_unavailability` exists, but only stage 1's reused-URL rule writes to it:
+  a YouTube video deleted or made private after ingestion, or a file replaced without a
+  new record claiming its URL, goes unnoticed. The shape is an adapter-owned
+  `check_availability()` (yt-dlp per video for YouTube, a `HEAD` request plus a
+  fingerprint recorded at download for direct URLs). It marks a lesson only on a
+  definitive answer, so a timeout or rate limit never takes a lesson off the site. A
+  `last_checked_at` lets each run take the least recently checked lessons rather than
+  sweeping thousands at once.

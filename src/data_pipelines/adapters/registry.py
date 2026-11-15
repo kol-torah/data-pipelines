@@ -10,6 +10,7 @@ from data_pipelines.adapters.ariel import ArielSourceAdapter
 from data_pipelines.adapters.base import SourceAdapter
 from data_pipelines.adapters.butbul import ButbulSourceAdapter
 from data_pipelines.adapters.eliyahu import ElyahuSourceAdapter
+from data_pipelines.adapters.emess import EmessSourceAdapter
 from data_pipelines.adapters.generic_youtube import GenericYouTubeSourceAdapter
 from data_pipelines.adapters.hazon_ovadia import HazonOvadiaSourceAdapter
 from data_pipelines.adapters.or_hachaim import OrHaChaimSourceAdapter
@@ -19,6 +20,8 @@ SOURCE_ADAPTERS: dict[str, type[SourceAdapter]] = {
     "butbul": ButbulSourceAdapter,
     "eliyahu": ElyahuSourceAdapter,
     "ariel": ArielSourceAdapter,
+    # Every קול חי program: the program id is the source row's external_id.
+    "emess": EmessSourceAdapter,
     "hazon_ovadia": HazonOvadiaSourceAdapter,
     "or_hachaim": OrHaChaimSourceAdapter,
     # Not bespoke, and the only entry here that is meant to be shared: a channel whose

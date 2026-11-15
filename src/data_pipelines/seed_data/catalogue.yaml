@@ -2,12 +2,18 @@ speakers:
 - slug: r-almog-levi
   name_he: הרב אלמוג לוי
   name_en: Rabbi Almog Levi
+- slug: r-avraham-yosef
+  name_he: הרב אברהם יוסף
+  name_en: Rabbi Avraham Yosef
 - slug: r-binyamin-chuta
   name_he: הרב בנימין חותה
   name_en: Rabbi Binyamin Chuta
 - slug: r-butbul
   name_he: הרב אהרון בוטבול
   name_en: Rabbi Aharon Butbul
+- slug: r-chaim-eideles
+  name_he: הרב חיים איידלס
+  name_en: Rabbi Chaim Eideles
 - slug: r-gluchovsky
   name_he: הרב יחיאל גלוכובסקי
   name_en: Rabbi Yechiel Gluchovsky
@@ -58,8 +64,14 @@ speaker_aliases:
   speaker: r-binyamin-chuta
 - name_he: ברוך רוזנבלום
   speaker: r-rosenblum
+- name_he: הגאון הרב חיים איידלס
+  speaker: r-chaim-eideles
+- name_he: הרב אברהם יוסף
+  speaker: r-avraham-yosef
 - name_he: הרב אהרון בוטבול
   speaker: r-butbul
+- name_he: הרב חיים איידלס
+  speaker: r-chaim-eideles
 - name_he: הרב יעקב אריאל
   speaker: r-j-ariel
 - name_he: הרב מרדכי אליהו
@@ -142,6 +154,16 @@ sources:
   platform: youtube
   external_id: UCYG1zMLW7s7QTwalxKOLmzw
   parser_key: butbul
+- slug: emess-derech-chaim
+  name: קול חי — דרך חיים
+  platform: http
+  external_id: '378'
+  parser_key: emess
+- slug: emess-shamor-vezachor
+  name: קול חי — שמור וזכור
+  platform: http
+  external_id: '382'
+  parser_key: emess
 - slug: harav-org
   name: harav.org
   platform: http
@@ -171,6 +193,11 @@ series:
   name_he: שאלות ותשובות
   name_en: Q&A
   lesson_type: qa
+- slug: r-avraham-yosef-shamor-vezachor
+  name_he: שמור וזכור
+  name_en: Shamor Vezachor
+  lesson_type: qa
+  description_he: שאלות ותשובות של מאזינים עם הרב אברהם יוסף ברדיו קול חי
 - slug: r-binyamin-chuta-hazon-ovadia
   name_he: שיעורי ההלכה של הרב בנימין חותה בכולל חזון עובדיה
   name_en: Halacha Lessons of Rabbi Binyamin Chuta at Kolel Hazon Ovadia
@@ -199,6 +226,11 @@ series:
   name_en: The Weekly Ashkelon Lesson of Rabbi Butbul
   lesson_type: halacha
   description_he: השיעור השבוע של הרב בוטבול באשקלון
+- slug: r-chaim-eideles-derech-chaim
+  name_he: דרך חיים
+  name_en: Derech Chaim
+  lesson_type: qa
+  description_he: שאלות ותשובות של מאזינים עם הרב חיים איידלס ברדיו קול חי
 - slug: r-eliyaho-q-a
   name_he: שאלות ותשובות
   name_en: Q&A
@@ -231,6 +263,13 @@ ingest_rules:
   kind: whole_feed
   config: {}
   default_speaker: r-j-ariel
+  priority: 100
+  enabled: true
+- source: emess-shamor-vezachor
+  series: r-avraham-yosef-shamor-vezachor
+  kind: title_match
+  config: {}
+  default_speaker: r-avraham-yosef
   priority: 100
   enabled: true
 - source: hazon-ovadia
@@ -279,6 +318,15 @@ ingest_rules:
   config:
     playlist_id: PLDOEgolnX2-xOF2aL29beuC8JX-VaaZRs
   default_speaker: r-butbul
+  priority: 100
+  enabled: true
+- source: emess-derech-chaim
+  series: r-chaim-eideles-derech-chaim
+  kind: title_match
+  config:
+    exclude:
+    - אופיר מלכה
+  default_speaker: r-chaim-eideles
   priority: 100
   enabled: true
 - source: harav-org

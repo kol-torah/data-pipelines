@@ -7,10 +7,12 @@ from data_pipelines.db.models import (
     LessonDuplicate,
     LessonSpeaker,
     LessonType,
+    LessonUnavailability,
     Series,
     Source,
     Speaker,
     SpeakerAlias,
+    UnavailabilityReason,
 )
 
 __all__ = [
@@ -22,8 +24,10 @@ __all__ = [
     "LessonDuplicate",
     "LessonSpeaker",
     "LessonType",
+    "LessonUnavailability",
     "Series",
     "Source",
     "Speaker",
     "SpeakerAlias",
+    "UnavailabilityReason",
 ]

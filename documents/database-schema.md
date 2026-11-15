@@ -1,7 +1,7 @@
 # Kol Torah — Database Schema: Discover / Download / Store
 
 **Status:** Current — reflects the catalogue redesign
-**Last updated:** 2026-09-03
+**Last updated:** 2026-11-15
 
 ---
 
@@ -296,6 +296,35 @@ lesson. This table only gets pass-1 hash matches for now (design.md §2.3) — p
 (transcript similarity) needs transcripts, so it's out of scope until the transcription
 slice exists, but the table shape already accommodates it via `method` and `score`.
 
+### 3.7 `lesson_unavailability`
+
+A row means the lesson's source no longer has it, so nothing public may point to it.
+Kol Torah links users to the source rather than serving audio, so a lesson whose source
+is gone is a broken lesson even though its stored audio is fine
+(`documents/plans/emess-radio-plan.md` §4.4).
+
+| Column              | Type        | Constraints                         | Notes |
+| ------------------- | ----------- | ----------------------------------- | ----- |
+| `lesson_id`         | bigint      | PK, FK → `lessons.id`               | one row per unavailable lesson |
+| `reason`            | text        | not null, check: one of the reasons | `source_url_reused` (below); the Python vocabulary is `db.models.UnavailabilityReason` |
+| `superseded_by_id`  | bigint      | FK → `lessons.id`, nullable         | for `source_url_reused`, the lesson that now owns the URL |
+| `detected_at`       | timestamptz | not null, default now()             | |
+
+**Reasons.** `source_url_reused`: a newer lesson from the same source arrived with this
+lesson's URL, meaning the source replaced the file in place. Written by stage 1
+(`s01_discover.mark_superseded`). It can't fire for YouTube, whose URLs are derived from
+the video id. קול חי did this until June 2026, uploading every week under one fixed name.
+
+**Effects.** Stage 2 never downloads an unavailable lesson. If it did, a lesson whose
+file was replaced before its download would get the replacement's audio under its own
+name. Audio already stored is kept: it was downloaded before the replacement, so it is
+the right audio. The web tier must neither show nor link to an unavailable lesson.
+
+A mistaken row is simply deleted. A periodic pass that checks every lesson against its
+source, writing `deleted_at_source`, is a planned follow-up
+(`emess-radio-plan.md` §6.1). The check constraint gains that reason in the same
+migration that introduces it.
+
 ---
 
 ## 4. Design decisions and rationale
@@ -431,6 +460,11 @@ locally" boolean could drift from the filesystem (§4.2's reasoning applies equa
 Anything that needs a lesson's status — pipeline query or admin UI — should derive it from
 these two tables, ideally through one shared helper, rather than re-deriving the
 combination logic at each call site.
+
+**Unavailability is a separate axis, and also row presence.** A `lesson_unavailability`
+row (§3.7) says the *source* no longer has the lesson. It can sit beside any of the three
+states above (a stored lesson whose file was later replaced keeps its audio), so it is
+not a fourth state. Stage 2's "needs download" additionally requires its absence.
 
 This only distinguishes "not yet attempted" from "done," not failure: see §5's known gap
 on `lesson_downloads` below — a lesson whose download or store failed looks identical to

@@ -12,14 +12,11 @@ import re
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any
-from zoneinfo import ZoneInfo
-
 from data_pipelines.adapters.base import LessonCandidate
+from data_pipelines.adapters.gregorian_date import ISRAEL_TZ, israel_date
 from data_pipelines.adapters.hebrew_date import find_hebrew_date, parse_hebrew_date
 from data_pipelines.adapters.youtube import YouTubeSourceAdapter
 from data_pipelines.db.models import Series
-
-ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 
 # Every Butbul playlist wraps its occasion (parasha / holiday) in different, drifting
 # boilerplate, but always around a DD.MM.YY (or DD-MM-YY) date — so parsing is staged
@@ -31,15 +28,7 @@ _YEAR_TOKEN_RE = re.compile(r'\s*ת[א-ת"]{1,4}\s*$')
 
 
 def _parse_recorded_at(date_match: re.Match[str]) -> datetime | None:
-    try:
-        return datetime(
-            2000 + int(date_match["year"]),
-            int(date_match["month"]),
-            int(date_match["day"]),
-            tzinfo=ISRAEL_TZ,
-        )
-    except ValueError:
-        return None
+    return israel_date(int(date_match["day"]), int(date_match["month"]), int(date_match["year"]))
 
 
 def _dated_candidate(

@@ -1,0 +1,117 @@
+{
+ "aryo_programs": [
+  {
+   "id": 1961507,
+   "title": "דרך חיים &#8211; ב' כסלו תשפ&quot;ז – 12.11.26",
+   "content": "",
+   "date": "2026-11-12 22:06:54",
+   "date_iso": "--",
+   "link": "https://www.emess.co.il/radio/broadcast/%d7%93%d7%a8%d7%9a-%d7%97%d7%99%d7%99%d7%9d-%d7%91-%d7%9b%d7%a1%d7%9c%d7%95-%d7%aa%d7%a9%d7%a4%d7%96-12-11-26",
+   "audio_in_content": [
+    {
+     "audio_file": "https://www.emess.co.il/wp-content/uploads/2026/11/12-11-26-2205-35e8712e.mp3",
+     "audio_lenght": ""
+    }
+   ],
+   "maguishim_new": [
+    {
+     "id": 3626,
+     "name": "הגאון הרב חיים איידלס"
+    }
+   ]
+  },
+  {
+   "id": 1874323,
+   "title": "דרך חיים &#8211; ד' סיוון תשפ&quot;ו  &#8211; 20.05.26",
+   "content": "",
+   "date": "2026-05-20 22:00:18",
+   "date_iso": "--",
+   "link": "https://www.emess.co.il/radio/broadcast/%d7%93%d7%a8%d7%9a-%d7%97%d7%99%d7%99%d7%9d-%d7%93-%d7%a1%d7%99%d7%95%d7%95%d7%9f-%d7%aa%d7%a9%d7%a4%d7%95-20-05-26",
+   "audio_in_content": [
+    {
+     "audio_file": "https://www.emess.co.il/wp-content/uploads/2026/05/דרך-חיים.mp3",
+     "audio_lenght": ""
+    }
+   ],
+   "maguishim_new": [
+    {
+     "id": 3626,
+     "name": "הגאון הרב חיים איידלס"
+    }
+   ]
+  },
+  {
+   "id": 1871079,
+   "title": "דרך חיים &#8211; כ&quot;ח אייר תשפ&quot;ו &#8211; 14.05.26",
+   "content": "",
+   "date": "2026-05-14 23:23:27",
+   "date_iso": "--",
+   "link": "https://www.emess.co.il/radio/broadcast/%d7%93%d7%a8%d7%9a-%d7%97%d7%99%d7%99%d7%9d-%d7%9b%d7%97-%d7%90%d7%99%d7%99%d7%a8-%d7%aa%d7%a9%d7%a4%d7%95-14-05-26",
+   "audio_in_content": [
+    {
+     "audio_file": "https://www.emess.co.il/wp-content/uploads/2026/05/דרך-חיים.mp3",
+     "audio_lenght": ""
+    }
+   ],
+   "maguishim_new": [
+    {
+     "id": 3626,
+     "name": "הגאון הרב חיים איידלס"
+    }
+   ]
+  },
+  {
+   "id": 1867452,
+   "title": "דרך חיים &#8211; כ' אייר תשפ&quot;ו &#8211; 07.05.26",
+   "content": "",
+   "date": "2026-05-08 00:18:36",
+   "date_iso": "--",
+   "link": "https://www.emess.co.il/radio/broadcast/%d7%93%d7%a8%d7%9a-%d7%97%d7%99%d7%99%d7%9d-%d7%9b-%d7%90%d7%99%d7%99%d7%a8-%d7%aa%d7%a9%d7%a4%d7%95-07-05-26",
+   "audio_in_content": [
+    {
+     "audio_file": "https://www.emess.co.il/wp-content/uploads/2026/05/דרך-חיים.mp3",
+     "audio_lenght": ""
+    }
+   ],
+   "maguishim_new": [
+    {
+     "id": 3626,
+     "name": "הגאון הרב חיים איידלס"
+    }
+   ]
+  },
+  {
+   "id": 1794310,
+   "title": "דרך חיים 11.12.25",
+   "content": "",
+   "date": "2025-12-11 22:01:19",
+   "date_iso": "--",
+   "link": "https://www.emess.co.il/radio/broadcast/%d7%93%d7%a8%d7%9a-%d7%97%d7%99%d7%99%d7%9d-%d7%a9%d7%a2%d7%94-%d7%a8%d7%90%d7%a9%d7%95%d7%a0%d7%94-11-12",
+   "audio_in_content": [
+    {
+     "audio_file": "https://www.emess.co.il/wp-content/uploads/2025/12/דרך-חיים-ערוך.mp3",
+     "audio_lenght": ""
+    },
+    {
+     "audio_file": "",
+     "audio_lenght": "",
+     "TESTTWO": "TEST"
+    }
+   ],
+   "maguishim_new": [
+    {
+     "id": 3626,
+     "name": "הגאון הרב חיים איידלס"
+    }
+   ]
+  }
+ ],
+ "post": [
+  {
+   "id": 1958036,
+   "title": "הרב תוקף את מי שלא הצביע: &quot;ייתנו את הדין&quot;",
+   "date": "2026-11-08 21:55:28",
+   "link": "https://www.emess.co.il/radio/1958036"
+  }
+ ]
+}

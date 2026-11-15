@@ -1,0 +1,74 @@
+# קול חי radio (emess.co.il): two listener Q&A programs, one shared adapter
+# (documents/plans/emess-radio-plan.md).
+#
+# שמור וזכור — הרב אברהם יוסף, program 382. דרך חיים — הרב חיים איידלס, program 378.
+# Surveyed 2026-11-15: 628 and 603 broadcast records, 2012-09 → 2026-11, 2018 nearly
+# empty. 43 records' audio was overwritten in place by the station and is gone (plan
+# §2.2); the adapter skips them and names them on every run.
+#
+#   uv run python -m data_pipelines.catalogue.seed_catalogue \
+#       --input src/data_pipelines/seed_data/additions/2026-11-15-emess.yaml --delta
+#   uv run python -m data_pipelines.catalogue.export_catalogue
+#   uv run python -m data_pipelines.pipelines.discover.s01_discover r-avraham-yosef-shamor-vezachor
+#   uv run python -m data_pipelines.pipelines.discover.s01_discover r-chaim-eideles-derech-chaim
+
+speakers:
+- slug: r-avraham-yosef
+  name_he: הרב אברהם יוסף
+  name_en: Rabbi Avraham Yosef
+- slug: r-chaim-eideles
+  name_he: הרב חיים איידלס
+  name_en: Rabbi Chaim Eideles
+
+# How the site's own speaker tag (`maguishim_new`) spells them. Resolution only — the
+# rules below don't route by speaker, because that tag is wrong at least once (§2.1).
+speaker_aliases:
+- name_he: הרב אברהם יוסף
+  speaker: r-avraham-yosef
+- name_he: הרב חיים איידלס
+  speaker: r-chaim-eideles
+- name_he: הגאון הרב חיים איידלס
+  speaker: r-chaim-eideles
+
+sources:
+- slug: emess-shamor-vezachor
+  name: קול חי — שמור וזכור
+  platform: http
+  external_id: '382'
+  parser_key: emess
+- slug: emess-derech-chaim
+  name: קול חי — דרך חיים
+  platform: http
+  external_id: '378'
+  parser_key: emess
+
+series:
+- slug: r-avraham-yosef-shamor-vezachor
+  name_he: שמור וזכור
+  name_en: Shamor Vezachor
+  lesson_type: qa
+  description_he: שאלות ותשובות של מאזינים עם הרב אברהם יוסף ברדיו קול חי
+- slug: r-chaim-eideles-derech-chaim
+  name_he: דרך חיים
+  name_en: Derech Chaim
+  lesson_type: qa
+  description_he: שאלות ותשובות של מאזינים עם הרב חיים איידלס ברדיו קול חי
+
+# `title_match` with no speakers: the program is the whole listing, and the kind is
+# chosen for its `exclude` (plan §3). The off-pattern שמור וזכור titles (`שואלין ודורשין`,
+# holiday-eve specials) are the same rabbi and format and stay in.
+ingest_rules:
+- source: emess-shamor-vezachor
+  series: r-avraham-yosef-shamor-vezachor
+  kind: title_match
+  config: {}
+  default_speaker: r-avraham-yosef
+  priority: 100
+- source: emess-derech-chaim
+  series: r-chaim-eideles-derech-chaim
+  kind: title_match
+  # Record 1049063, `הלכה למעשה עם הרב אופיר מלכה`: another rabbi's show, filed under
+  # this program and even tagged with this rabbi's name.
+  config: {exclude: ['אופיר מלכה']}
+  default_speaker: r-chaim-eideles
+  priority: 100

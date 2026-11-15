@@ -1,7 +1,7 @@
 # Discover pipeline
 
 **Status:** Implemented — stages 1-3
-**Last updated:** 2026-09-01
+**Last updated:** 2026-11-15
 **Code:** `src/data_pipelines/pipelines/discover/`
 
 ---
@@ -92,6 +92,16 @@ display rather than opening a second, competing one — e.g. `ButbulDailyHalacha
 shows a per-playlist sub-bar (it's the only Butbul series with more than one
 playlist), `ElyahuQAAdapter` shows a per-item one.
 
+**A reused URL marks the earlier lesson unavailable.** A new lesson whose `url` is
+already another lesson's, from the same source, means the source replaced that lesson's
+file in place. The earlier lesson gets a `lesson_unavailability` row
+(`database-schema.md` §3.7) naming the new one, and the run prints it and counts it as
+`marked unavailable`. `UrlOwners` tracks each source's URL owners across all of that
+source's rules in a run, the same way the known-external-id set does. The rule is generic
+but only fires where URLs can be reused: a YouTube URL is derived from the video id, and
+Ariel and Eliyahu have one URL per episode. It exists for קול חי, which until June 2026
+overwrote one fixed-name file each week (`emess-radio-plan.md` §2.2).
+
 ```bash
 uv run python -m data_pipelines.pipelines.discover.s01_discover               # every series
 uv run python -m data_pipelines.pipelines.discover.s01_discover <series-slug> # one series
@@ -133,6 +143,11 @@ Two consequences worth knowing before writing such a rule:
   mean five listings. `discover_all` builds one adapter per source and reuses it, and
   `YouTubeSourceAdapter.list_uploads` memoizes on that instance.
 
+`title_match` is not YouTube-only. The קול חי programs (`adapters/emess.py`) use it with
+no `speakers`, purely for `exclude`: each program is the source's whole listing, but
+`whole_feed` has no config, and דרך חיים's listing carries another rabbi's broadcast
+that only its title gives away.
+
 Skips are counted and reported at every layer — a parser's own boilerplate rules (`לו"ז`,
 live-stream placeholders), a rule's `exclude` patterns, and candidates no rule claimed.
 An exclusion that quietly eats 400 real lessons is the failure this design is built to
@@ -142,9 +157,11 @@ make visible (§2.5).
 
 ## 4. Stage 2 — Download (`s02_download.py`)
 
-**"Needs download"** = no `audio_files` row (fully stored) **and** no
+**"Needs download"** = no `audio_files` row (fully stored), no
 `lesson_downloads` row (already downloaded, awaiting store — `database-schema.md`
-§3.4a). Both are database rows, not filesystem checks — a download that dies
+§3.4a), and no `lesson_unavailability` row (§3.7). The last matters when a source can
+replace a file in place: such a lesson would otherwise download the replacement under
+its own name. `--lesson-id` refuses an unavailable lesson outright. Both are database rows, not filesystem checks — a download that dies
 partway through (network drop, disk full, killed process) can leave a real,
 non-empty file sitting at the staging path, and only a row written *after* the file
 is fully in place can tell "downloaded" apart from "downloading, or failed midway".
@@ -394,6 +411,7 @@ clobber your edits, because they live somewhere else.
 | Download staging (pre-store) | `{local_cache_dir}/staging/{series_slug}/{external_id}.{ext}` | Pipeline-internal working space, not the schema's official cache. Tracked in`lesson_downloads`, not by filesystem presence.                                                                           |
 | Local cache (post-store)     | `{local_cache_dir}/{storage_key}`                             | `database-schema.md` §4.2. No DB existence flag — checked directly on disk. Files may be deleted by hand (manual cleanup, for now); a later transcription-stage read just re-pulls from the bucket. |
 | Bucket                       | `s3://{bucket}/{storage_key}`                                 | Same`storage_key` as the local cache, different root. Carries `content-hash`/`duration-s` as object metadata (§4.1, §5).                                                                        |
+| קול חי (emess.co.il) archives | `adapters/emess.py`; one `sources` row per program, `external_id` = program id | Listing endpoint, termination rule, overwritten URLs and the legacy-host rewrite: `documents/plans/emess-radio-plan.md` §4. |
 | `local_cache_dir` config   | `config.toml` → `Settings.local_cache_dir`                 | Defaults to`data/audio-cache`, resolved relative to the repo root if given as a relative path.                                                                                                        |
 
 ---

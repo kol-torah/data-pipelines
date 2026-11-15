@@ -1,7 +1,16 @@
 from datetime import datetime
+from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import Boolean, ForeignKey, Integer, Text, UniqueConstraint, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    ForeignKey,
+    Integer,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -244,3 +253,37 @@ class LessonDuplicate(Base):
 
     lesson: Mapped["Lesson"] = relationship(foreign_keys=[lesson_id])
     duplicate_of: Mapped["Lesson"] = relationship(foreign_keys=[duplicate_of_id])
+
+
+class UnavailabilityReason(StrEnum):
+    """Why a lesson can no longer be pointed to at its source. The `reason` column's
+    check constraint is built from this, so the two can't disagree."""
+
+    # A newer lesson from the same source now claims this lesson's URL — the source
+    # replaced the file in place (emess-radio-plan.md §2.2).
+    SOURCE_URL_REUSED = "source_url_reused"
+
+
+class LessonUnavailability(Base):
+    """documents/database-schema.md §3.7. A row means the lesson's source no longer has
+    it, so nothing public may point to it.
+
+    Row presence rather than a status column on `lessons` (§4.5): the state is a fact
+    discovered at one moment, with a reason, and removing it is deleting the row."""
+
+    __tablename__ = "lesson_unavailability"
+    __table_args__ = (
+        CheckConstraint(
+            "reason IN (" + ", ".join(f"'{r.value}'" for r in UnavailabilityReason) + ")",
+            name="reason",
+        ),
+    )
+
+    lesson_id: Mapped[int] = mapped_column(ForeignKey("lessons.id"), primary_key=True)
+    reason: Mapped[UnavailabilityReason] = mapped_column(Text)
+    # For SOURCE_URL_REUSED, the lesson that now owns the URL.
+    superseded_by_id: Mapped[int | None] = mapped_column(ForeignKey("lessons.id"))
+    detected_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    lesson: Mapped["Lesson"] = relationship(foreign_keys=[lesson_id])
+    superseded_by: Mapped["Lesson | None"] = relationship(foreign_keys=[superseded_by_id])

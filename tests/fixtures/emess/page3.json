@@ -1,0 +1,58 @@
+{
+ "aryo_programs": [
+  {
+   "id": 1051930,
+   "title": "דרך חיים עם הרב חיים איידלס – ו' תשרי תשפ&quot;ד – 21.09.23",
+   "content": "",
+   "date": "2023-09-21 20:41:06",
+   "date_iso": "--",
+   "link": "https://www.emess.co.il/radio/broadcast/%d7%93%d7%a8%d7%9a-%d7%97%d7%99%d7%99%d7%9d-%d7%a2%d7%9d-%d7%94%d7%a8%d7%91-%d7%97%d7%99%d7%99%d7%9d-%d7%90%d7%99%d7%99%d7%93%d7%9c%d7%a1-%d7%95-%d7%aa%d7%a9%d7%a8%d7%99-%d7%aa%d7%a9%d7%a4",
+   "audio_in_content": [
+    "https://www.emess.co.il/wp-content/uploads/2023/09/קול-חי-מעובד-2023-09-21-20-00-10.mp3",
+    "https://www.emess.co.il/wp-content/uploads/2023/09/קול-חי-מעובד-2023-09-21-21-00-10.mp3"
+   ],
+   "maguishim_new": [
+    {
+     "id": 3626,
+     "name": "הגאון הרב חיים איידלס"
+    }
+   ]
+  },
+  {
+   "id": 1049063,
+   "title": "הלכה למעשה עם הרב אופיר מלכה &#8211; י&quot;א אדר ב' תשפ&quot;ד &#8211; 21.03.2024",
+   "content": "<p><strong>שעה ראשונה:</strong></p>\n<audio class=\"wp-audio-shortcode\" id=\"audio-1049063-25\" preload=\"none\" style=\"width: 100%;\" controls=\"controls\"><source type=\"audio/mpeg\" src=\"https://media.kcm.fm/wp-uploads/2024/03/הלכה-למעשה-ערוך-1.mp3?_=25\" /><a href=\"https://media.kcm.fm/wp-uploads/2024/03/הלכה-למעשה-ערוך-1.mp3\">https://media.kcm.fm/wp-uploads/2024/03/הלכה-למעשה-ערוך-1.mp3</a></audio>\n<p>&nbsp;</p>\n<p><strong>שעה שניה:</strong></p>\n<audio class=\"wp-audio-shortcode\" id=\"audio-1049063-26\" preload=\"none\" style=\"width: 100%;\" controls=\"controls\"><source type=\"audio/mpeg\" src=\"https://media.kcm.fm/wp-uploads/2024/03/הלכה-למעשה-ערוך.mp3?_=26\" /><a href=\"https://media.kcm.fm/wp-uploads/2024/03/הלכה-למעשה-ערוך.mp3\">https://media.kcm.fm/wp-uploads/2024/03/הלכה-למעשה-ערוך.mp3</a></audio>\n",
+   "date": "2024-03-21 22:37:51",
+   "date_iso": "--",
+   "link": "https://www.emess.co.il/radio/broadcast/%d7%9c%d7%9b%d7%94-%d7%9c%d7%9e%d7%a2%d7%a9%d7%94-%d7%a2%d7%9d-%d7%94%d7%a8%d7%91-%d7%90%d7%95%d7%a4%d7%99%d7%a8-%d7%9e%d7%9c%d7%9b%d7%94-%d7%99%d7%90-%d7%90%d7%93%d7%a8-%d7%91-%d7%aa%d7%a9",
+   "audio_in_content": [
+    "https://media.kcm.fm/wp-uploads/2024/03/הלכה-למעשה-ערוך-1.mp3",
+    "https://media.kcm.fm/wp-uploads/2024/03/הלכה-למעשה-ערוך.mp3"
+   ],
+   "maguishim_new": [
+    {
+     "id": 3626,
+     "name": "הגאון הרב חיים איידלס"
+    }
+   ]
+  },
+  {
+   "id": 1118876,
+   "title": "דרך חיים 12.9.12",
+   "content": "",
+   "date": "2012-09-12 09:21:59",
+   "date_iso": "--",
+   "link": "https://www.emess.co.il/radio/broadcast/%d7%93%d7%a8%d7%9a-%d7%97%d7%99%d7%99%d7%9d-12-9-12",
+   "audio_in_content": [
+    "https://files.93fm.co.il/uploads/2012/09/דרך-חיים-12.9.12.mp3"
+   ],
+   "maguishim_new": [
+    {
+     "id": 3626,
+     "name": "הגאון הרב חיים איידלס"
+    }
+   ]
+  }
+ ],
+ "post": []
+}
