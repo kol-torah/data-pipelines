@@ -34,6 +34,7 @@ Run with: uv run python -m data_pipelines.pipelines.discover.s02_download [serie
 
 import argparse
 import asyncio
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -151,15 +152,41 @@ def recover_from_bucket(session: Session, series: Series, lessons: list[Lesson])
     return remaining
 
 
+class EmptyDownload(Exception):
+    """The source answered successfully with no content — a real case: one קול חי file
+    is served as `200 audio/mpeg` with `Content-Length: 0`. Refused rather than recorded,
+    so it fails visibly on every run instead of being stored as a 0-byte "lesson"."""
+
+
+def _sync_to_disk(path: Path) -> None:
+    """Flush the file and its directory entry to disk before the lesson_downloads row
+    that vouches for it is written. Without this, a crash shortly after a download
+    leaves a row recording the real size beside a file the filesystem never flushed —
+    which is exactly what a power loss did to five files on 2026-11-15, each emptied to
+    0 bytes with its row still claiming tens of megabytes."""
+    with path.open("rb") as f:
+        os.fsync(f.fileno())
+    dir_fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
 async def download_lesson(
     adapter: SourceAdapter, series: Series, lesson: Lesson, cache_root: Path
 ) -> Path:
     tmp_path = await adapter.download(lesson)
+    if tmp_path.stat().st_size == 0:
+        tmp_path.unlink()
+        tmp_path.parent.rmdir()
+        raise EmptyDownload(f"{lesson.url} returned no content")
     dest_dir = staging_dir(cache_root, series)
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / f"{lesson.external_id}{tmp_path.suffix}"
     shutil.move(tmp_path, dest)
     tmp_path.parent.rmdir()
+    await asyncio.to_thread(_sync_to_disk, dest)
     return dest
 
 

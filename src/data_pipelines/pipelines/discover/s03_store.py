@@ -9,6 +9,11 @@ between the two stages, and the file it points at is by then duplicated at the p
 local-cache path (§4.2, keyed by storage_key), so there's no reason to keep either the
 row or a second copy of the file around.
 
+One lesson failing never stops the run. A file ffprobe cannot read is a bad download,
+not a bad lesson — an empty file left behind by a crash, or a truncated one — so its file
+and lesson_downloads row are discarded and stage 2 fetches it again next run. Any other
+failure (an upload error, say) keeps the row, so the next run retries the store.
+
 Run with: uv run python -m data_pipelines.pipelines.discover.s03_store [series-slug]
 (omit series-slug to run every series)
 """
@@ -16,6 +21,7 @@ Run with: uv run python -m data_pipelines.pipelines.discover.s03_store [series-s
 import argparse
 import hashlib
 import subprocess
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from sqlalchemy import create_engine, select
@@ -49,6 +55,11 @@ def _hash_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+class UnreadableAudio(Exception):
+    """ffprobe could not read the file as audio. Carries ffprobe's own explanation,
+    which CalledProcessError's message leaves out."""
+
+
 def _probe_duration_s(path: Path) -> float:
     result = subprocess.run(
         [
@@ -62,10 +73,14 @@ def _probe_duration_s(path: Path) -> float:
             str(path),
         ],
         capture_output=True,
-        check=True,
         text=True,
     )
-    return float(result.stdout.strip())
+    if result.returncode != 0:
+        raise UnreadableAudio(result.stderr.strip() or f"ffprobe exited with {result.returncode}")
+    try:
+        return float(result.stdout.strip())
+    except ValueError:
+        raise UnreadableAudio(f"ffprobe gave no duration (output: {result.stdout.strip()!r})")
 
 
 def store_lesson_audio(session: Session, series: Series, lesson: Lesson, cache_root: Path) -> AudioFile:
@@ -86,8 +101,9 @@ def store_lesson_audio(session: Session, series: Series, lesson: Lesson, cache_r
         # missing file that's simply already in place.
         staged.replace(cache_path)
 
-    content_hash = _hash_file(cache_path)
+    # Probed before hashing: an unreadable file is rejected without reading all of it.
     duration_s = _probe_duration_s(cache_path)
+    content_hash = _hash_file(cache_path)
     audio_file = AudioFile(
         lesson_id=lesson.id,
         content_hash=content_hash,
@@ -103,21 +119,63 @@ def store_lesson_audio(session: Session, series: Series, lesson: Lesson, cache_r
     return audio_file
 
 
+def discard_download(session: Session, series: Series, lesson: Lesson, cache_root: Path) -> None:
+    """Forget a bad download so stage 2 fetches it again: the file, wherever it got to
+    (staging, or already moved into the cache), and its lesson_downloads row."""
+    assert lesson.download is not None
+    staged = Path(lesson.download.local_path)
+    format_ = staged.suffix.removeprefix(".")
+    cache_path = cache_root / f"{storage_key_prefix(series, lesson)}.{format_}"
+    staged.unlink(missing_ok=True)
+    cache_path.unlink(missing_ok=True)
+    session.delete(lesson.download)
+    session.commit()
+
+
+@dataclass
+class StoreCounts:
+    stored: int = 0
+    redownload: list[str] = field(default_factory=list)
+    failed: list[str] = field(default_factory=list)
+
+
 def store_all(session: Session, series_list: list[Series], cache_root: Path) -> None:
     pending = [(series, lesson) for series in series_list for lesson in lessons_needing_store(session, series)]
-    counts: dict[str, int] = {series.slug: 0 for series in series_list}
+    counts: dict[str, StoreCounts] = {series.slug: StoreCounts() for series in series_list}
 
     with make_progress() as progress:
         task = progress.add_task("Storing", total=len(pending))
         for series, lesson in pending:
             progress.update(task, description=f"Storing [bold]{series.slug:30}")
-            audio_file = store_lesson_audio(session, series, lesson, cache_root)
-            progress.console.print(f"{series.slug}  {lesson.external_id}  -> {audio_file.storage_key}")
-            counts[series.slug] += 1
+            outcome = counts[series.slug]
+            try:
+                audio_file = store_lesson_audio(session, series, lesson, cache_root)
+            except UnreadableAudio as exc:
+                session.rollback()
+                discard_download(session, series, lesson, cache_root)
+                outcome.redownload.append(lesson.external_id)
+                progress.console.print(
+                    f"{series.slug}  {lesson.external_id}  UNREADABLE, will re-download: {exc}"
+                )
+            except Exception as exc:  # noqa: BLE001 — one bad lesson shouldn't sink the batch
+                session.rollback()
+                outcome.failed.append(lesson.external_id)
+                progress.console.print(f"{series.slug}  {lesson.external_id}  FAILED: {exc!r}")
+            else:
+                outcome.stored += 1
+                progress.console.print(
+                    f"{series.slug}  {lesson.external_id}  -> {audio_file.storage_key}"
+                )
             progress.advance(task)
 
     for series in series_list:
-        print(f"{series.slug}: {pluralize(counts[series.slug], 'lesson')} stored")
+        outcome = counts[series.slug]
+        line = f"{series.slug}: {pluralize(outcome.stored, 'lesson')} stored"
+        if outcome.redownload:
+            line += f", {len(outcome.redownload)} unreadable (re-download: {', '.join(outcome.redownload)})"
+        if outcome.failed:
+            line += f", {len(outcome.failed)} failed (retry: {', '.join(outcome.failed)})"
+        print(line)
 
 
 def main() -> None:

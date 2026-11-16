@@ -242,6 +242,18 @@ overlap: `asyncio` is cooperative, so the write happens between awaits, never
 actually concurrently with another task's code. A lesson that fails to download is
 logged and simply left out — it'll show up again next run.
 
+Two checks run on every download, whatever the adapter:
+
+- **An empty file is a failure, not a download.** One קול חי file is served as
+  `200 audio/mpeg` with `Content-Length: 0`. It is refused (`EmptyDownload`) and fails
+  visibly every run, rather than being recorded as a 0-byte success that stage 3 then
+  can't probe.
+- **The staged file is flushed to disk (`fsync`, file and directory) before its row is
+  written.** On 2026-11-15 a power loss a few minutes after a batch of downloads left
+  five rows recording tens of megabytes beside files the filesystem had never flushed,
+  all of them 0 bytes after the reboot. The row is the pipeline's promise that the file
+  is there, so it can only be written once that's true.
+
 ```bash
 uv run python -m data_pipelines.pipelines.discover.s02_download               # every series
 uv run python -m data_pipelines.pipelines.discover.s02_download <series-slug> # one series
@@ -313,6 +325,13 @@ For each pending lesson:
 5. Delete the `lesson_downloads` row — its job is done, and the file it pointed at
    is now duplicated at the proper cache path, so there's no reason to keep either
    the staging copy or the row around.
+
+**One lesson failing never stops the run.** A file ffprobe can't read (`UnreadableAudio`,
+carrying ffprobe's own message) is treated as a bad *download*: its file is deleted,
+from staging or from the cache path if step 1 already moved it, along with its
+`lesson_downloads` row, so stage 2 fetches it again next run. Any other failure, such as
+an upload error, is logged and keeps the row, so the next run retries the store. The
+summary lists both kinds by `external_id`.
 
 **Interruption safety.** Step 1's move happens before the `audio_files` row is
 committed (step 4) — a run interrupted in that window (Ctrl+C, a crash) leaves the
